@@ -1,203 +1,308 @@
 <template>
-  <div>
-    <h1 class="page-title">My Orders</h1>
+  <div class="orders-page">
+    <a-page-header title="我的訂單" sub-title="追蹤所有送樣申請的接力進度" :back-icon="false">
+      <template #extra>
+        <a-button @click="loadOrders" :loading="loading">
+          <template #icon><ReloadOutlined /></template>
+          重新整理
+        </a-button>
+        <a-button type="primary" @click="$router.push('/orders/create')">
+          <template #icon><FileAddOutlined /></template>
+          新建訂單
+        </a-button>
+      </template>
+    </a-page-header>
 
-    <div class="card table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Experiment</th>
-            <th>Lot ID</th>
-            <th>Relay Progress</th>
-            <th>Overall Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="o in orders" :key="o.id">
-            <td>{{ o.order_no }}</td>
-            <td class="font-bold">{{ o.experiment_name }}</td>
-            <td class="text-muted">{{ o.lot_id }}</td>
-            <td>
-              <!-- Inline Relay Progress -->
-              <div class="relay-mini-track">
-                <div v-for="s in o.stages" :key="s.id" 
-                     class="relay-dot" 
-                     :class="'status-' + s.status"
-                     :title="`${s.department_name}: ${s.equipment_type_name} (${s.status})`">
-                </div>
-              </div>
-            </td>
-            <td><span :class="'badge badge-' + o.status">{{ o.status }}</span></td>
-            <td>
-              <button class="btn btn-outline btn-sm" @click="viewDetail(o)">View Details</button>
-            </td>
-          </tr>
-          <tr v-if="!orders.length">
-            <td colspan="6" class="text-muted" style="text-align:center;">No orders yet.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Order Detail Modal -->
-    <div v-if="selectedOrder" class="modal-overlay" @click.self="selectedOrder = null">
-      <div class="card modal-card">
-        <div class="modal-header">
-          <h3>Order Detail: {{ selectedOrder.order_no }}</h3>
-          <button class="close-btn" @click="selectedOrder = null">&times;</button>
-        </div>
-
-        <!-- Advanced Relay Tracker -->
-        <div class="relay-tracker-container mb-8">
-          <h4 class="text-sm font-bold mb-4 uppercase tracking-wider text-muted">Experiment Relay Pipeline</h4>
-          <div class="relay-tracker">
-            <div v-for="(stage, idx) in selectedOrder.stages" :key="stage.id" 
-                 class="relay-step" 
-                 :class="{ 
-                    'active': stage.status === 'in_progress', 
-                    'waiting': stage.status === 'waiting',
-                    'completed': stage.status === 'done',
-                    'pending': stage.status === 'pending'
-                 }">
-              <div class="relay-circle">
-                <i v-if="stage.status === 'done'">✓</i>
-                <span v-else>{{ idx + 1 }}</span>
-              </div>
-              <div class="relay-info text-center">
-                <div class="relay-lab">{{ stage.department_name }}</div>
-                <div class="relay-eq">{{ stage.equipment_type_name }}</div>
-                <div class="relay-status-text">{{ stage.status }}</div>
-              </div>
-              <div v-if="idx < selectedOrder.stages.length - 1" class="relay-line"></div>
-            </div>
+    <a-table
+      :columns="columns"
+      :data-source="orders"
+      :loading="loading"
+      row-key="id"
+      :pagination="{ pageSize: 10, showTotal: (t) => `共 ${t} 筆` }"
+      bordered
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.dataIndex === 'order_no'">
+          <a-typography-text strong>{{ record.order_no }}</a-typography-text>
+        </template>
+        <template v-else-if="column.dataIndex === 'progress'">
+          <div class="relay-mini-track">
+            <a-tooltip
+              v-for="s in record.stages || []"
+              :key="s.id"
+              :title="`${s.department_name} · ${s.equipment_type_name} · ${s.status}`"
+            >
+              <span class="relay-dot" :class="`dot-${s.status}`"></span>
+            </a-tooltip>
+            <span v-if="!(record.stages || []).length" class="muted">無階段</span>
           </div>
+        </template>
+        <template v-else-if="column.dataIndex === 'status'">
+          <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
+        </template>
+        <template v-else-if="column.dataIndex === 'is_urgent'">
+          <a-tag v-if="record.is_urgent" color="red">緊急</a-tag>
+          <span v-else class="muted">—</span>
+        </template>
+        <template v-else-if="column.dataIndex === '__actions__'">
+          <a-button type="link" size="small" @click="viewDetail(record)">
+            <template #icon><EyeOutlined /></template>
+            檢視
+          </a-button>
+        </template>
+      </template>
+    </a-table>
+
+    <a-drawer
+      v-model:open="detailOpen"
+      :title="selectedOrder ? `訂單詳情:${selectedOrder.order_no}` : ''"
+      width="720"
+      placement="right"
+    >
+      <template v-if="selectedOrder">
+        <a-card title="接力進度" :bordered="false" size="small" class="detail-card">
+          <a-steps
+            v-if="(selectedOrder.stages || []).length"
+            :current="currentStepIndex"
+            size="small"
+            :status="overallStepsStatus"
+          >
+            <a-step
+              v-for="(stage, idx) in selectedOrder.stages"
+              :key="stage.id"
+              :title="`${idx + 1}. ${stage.equipment_type_name}`"
+              :status="stepStatus(stage)"
+            >
+              <template #description>
+                <div class="step-desc">
+                  <div>{{ stage.department_name }}</div>
+                  <a-tag :color="stageStatusColor(stage.status)" style="margin-top: 4px">
+                    {{ statusLabel(stage.status) }}
+                  </a-tag>
+                </div>
+              </template>
+            </a-step>
+          </a-steps>
+          <a-empty v-else description="此訂單尚未有階段" />
+        </a-card>
+
+        <a-divider />
+
+        <a-descriptions title="一般資訊" bordered :column="2" size="small">
+          <a-descriptions-item label="訂單編號" :span="2">
+            <code>{{ selectedOrder.order_no }}</code>
+          </a-descriptions-item>
+          <a-descriptions-item label="實驗">
+            {{ selectedOrder.experiment_name }}
+          </a-descriptions-item>
+          <a-descriptions-item label="Lot ID">
+            {{ selectedOrder.lot_id || '—' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="整體狀態">
+            <a-tag :color="statusColor(selectedOrder.status)">
+              {{ statusLabel(selectedOrder.status) }}
+            </a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="緊急">
+            <a-tag v-if="selectedOrder.is_urgent" color="red">緊急</a-tag>
+            <span v-else>否</span>
+          </a-descriptions-item>
+          <a-descriptions-item label="建立時間" :span="2">
+            {{ formatDate(selectedOrder.created_at) }}
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <a-divider />
+
+        <a-descriptions
+          v-if="currentStage"
+          title="當前作業站"
+          bordered
+          :column="1"
+          size="small"
+        >
+          <a-descriptions-item label="實驗室">
+            {{ currentStage.department_name }}
+          </a-descriptions-item>
+          <a-descriptions-item label="設備類型">
+            {{ currentStage.equipment_type_name }}
+          </a-descriptions-item>
+          <a-descriptions-item label="執行人員">
+            {{ currentStage.assignee_name || '尚未指派' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="設備代碼">
+            {{ currentStage.equipment_code || 'TBD' }}
+          </a-descriptions-item>
+          <a-descriptions-item v-if="currentStage.schedule_start" label="排程">
+            {{ formatDate(currentStage.schedule_start) }}
+            →
+            {{ formatDate(currentStage.schedule_end) }}
+          </a-descriptions-item>
+        </a-descriptions>
+
+        <a-alert
+          v-if="selectedOrder.rejection_reason"
+          type="error"
+          show-icon
+          :message="`駁回原因:${selectedOrder.rejection_reason}`"
+          style="margin-top: 16px"
+        />
+
+        <a-divider />
+
+        <div class="remark-block">
+          <h4>備註</h4>
+          <p v-if="selectedOrder.remark">{{ selectedOrder.remark }}</p>
+          <a-empty v-else description="無備註" :image-style="{ height: 40 }" />
         </div>
-
-        <div class="modal-content grid grid-cols-2 gap-4">
-          <section>
-            <h4>General Information</h4>
-            <p><strong>Experiment:</strong> {{ selectedOrder.experiment_name }}</p>
-            <p><strong>Lot ID:</strong> {{ selectedOrder.lot_id || '—' }}</p>
-            <p><strong>Total Status:</strong> <span :class="'badge badge-' + selectedOrder.status">{{ selectedOrder.status }}</span></p>
-            <p><strong>Urgent:</strong> {{ selectedOrder.is_urgent ? '🔴 Yes' : 'No' }}</p>
-          </section>
-          
-          <section>
-            <h4>Current / Last Active Station</h4>
-            <div v-if="currentStage" class="active-stage-box">
-              <p><strong>Lab:</strong> {{ currentStage.department_name }}</p>
-              <p><strong>Member:</strong> {{ currentStage.assignee_name || 'Not assigned' }}</p>
-              <p><strong>Equipment:</strong> {{ currentStage.equipment_code || 'TBD' }}</p>
-              <p v-if="currentStage.schedule_start">
-                <strong>Schedule:</strong> {{ fmtDt(currentStage.schedule_start) }}
-              </p>
-            </div>
-            <p v-else class="text-muted">No active station.</p>
-          </section>
-
-          <section class="col-span-2" v-if="selectedOrder.rejection_reason">
-            <h4 style="color:var(--c-danger);">Rejection Reason</h4>
-            <div class="rejection-box">{{ selectedOrder.rejection_reason }}</div>
-          </section>
-
-          <section class="col-section col-span-2">
-            <h4>Remarks</h4>
-            <p class="text-muted">{{ selectedOrder.remark || 'No remark provided.' }}</p>
-          </section>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn btn-outline" @click="selectedOrder = null">Close</button>
-        </div>
-      </div>
-    </div>
+      </template>
+    </a-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { fetchOrders, fetchOrder } from '../../api/orders'
+import { computed, onMounted, ref } from 'vue'
+import dayjs from 'dayjs'
+import { message } from 'ant-design-vue'
+import {
+  EyeOutlined,
+  FileAddOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons-vue'
+import { fetchOrder, fetchOrders } from '../../api/orders'
 
 const orders = ref([])
+const loading = ref(false)
+const detailOpen = ref(false)
 const selectedOrder = ref(null)
 
-const currentStage = computed(() => {
-  if (!selectedOrder.value || !selectedOrder.value.stages) return null
-  // Return the first stage that isn't DONE, or the last stage if all are done
-  const active = selectedOrder.value.stages.find(s => s.status !== 'done')
-  return active || selectedOrder.value.stages[selectedOrder.value.stages.length - 1]
-})
+const columns = [
+  { title: '訂單編號', dataIndex: 'order_no', width: 200, fixed: 'left' },
+  { title: '實驗', dataIndex: 'experiment_name', width: 220 },
+  { title: 'Lot ID', dataIndex: 'lot_id', width: 130 },
+  { title: '接力進度', dataIndex: 'progress', width: 200 },
+  { title: '緊急', dataIndex: 'is_urgent', width: 80 },
+  { title: '狀態', dataIndex: 'status', width: 110 },
+  { title: '', dataIndex: '__actions__', width: 100, fixed: 'right' },
+]
 
-onMounted(async () => {
-  const { data } = await fetchOrders()
-  orders.value = data.results || data
-})
+onMounted(loadOrders)
 
-async function viewDetail(order) {
+async function loadOrders() {
+  loading.value = true
   try {
-    const { data } = await fetchOrder(order.id)
-    selectedOrder.value = data
+    const { data } = await fetchOrders()
+    orders.value = data.results || data || []
   } catch (e) {
-    alert('Failed to load order detail.')
+    message.error('載入訂單失敗')
+  } finally {
+    loading.value = false
   }
 }
 
-function fmtDt(s) {
-  if (!s) return '—'
-  return new Date(s).toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' })
+async function viewDetail(record) {
+  try {
+    const { data } = await fetchOrder(record.id)
+    selectedOrder.value = data
+    detailOpen.value = true
+  } catch {
+    message.error('載入訂單詳情失敗')
+  }
+}
+
+const currentStage = computed(() => {
+  if (!selectedOrder.value?.stages?.length) return null
+  return (
+    selectedOrder.value.stages.find((s) => s.status !== 'done') ||
+    selectedOrder.value.stages[selectedOrder.value.stages.length - 1]
+  )
+})
+
+const currentStepIndex = computed(() => {
+  if (!selectedOrder.value?.stages?.length) return 0
+  const idx = selectedOrder.value.stages.findIndex((s) => s.status !== 'done')
+  return idx === -1 ? selectedOrder.value.stages.length - 1 : idx
+})
+
+const overallStepsStatus = computed(() => {
+  if (!selectedOrder.value) return 'process'
+  if (selectedOrder.value.status === 'rejected') return 'error'
+  if (selectedOrder.value.status === 'done') return 'finish'
+  return 'process'
+})
+
+function stepStatus(stage) {
+  return {
+    pending: 'wait', waiting: 'wait',
+    in_progress: 'process', done: 'finish', rejected: 'error',
+  }[stage.status] || 'wait'
+}
+
+function statusLabel(s) {
+  return {
+    created: '已建立', waiting: '等待中', pending: '待前段',
+    in_progress: '進行中', done: '完成', rejected: '駁回',
+  }[s] || s
+}
+function statusColor(s) {
+  return {
+    created: 'default', waiting: 'warning', pending: 'default',
+    in_progress: 'processing', done: 'success', rejected: 'error',
+  }[s] || 'default'
+}
+function stageStatusColor(s) {
+  return statusColor(s)
+}
+
+function formatDate(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
 }
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex;
-  align-items: center; justify-content: center; z-index: 100; padding: 20px;
+.orders-page {
+  padding: 0;
 }
-.modal-card { width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto; background: var(--c-bg-card); position: relative; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--c-border); padding-bottom: 12px; margin-bottom: 20px; }
-.close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--c-text-muted); }
-.modal-content h4 { margin-top: 0; margin-bottom: 8px; font-size: .85rem; color: var(--c-primary); border-bottom: 1px solid var(--c-border); padding-bottom: 4px; uppercase: true; }
-.modal-footer { margin-top: 24px; border-top: 1px solid var(--c-border); padding-top: 16px; text-align: right; }
-
-.grid { display: grid; }
-.grid-cols-2 { grid-template-columns: 1fr 1fr; }
-.col-span-2 { grid-column: span 2; }
-.gap-4 { gap: 1rem; }
-.mb-8 { margin-bottom: 2rem; }
-
-.relay-mini-track { display: flex; gap: 4px; }
-.relay-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-border); }
-.relay-dot.status-done { background: var(--c-success); }
-.relay-dot.status-in_progress { background: var(--c-info); animation: pulse 2s infinite; }
-.relay-dot.status-waiting { background: var(--c-warning); }
+.relay-mini-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.relay-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d9d9d9;
+  display: inline-block;
+}
+.dot-done { background: #52c41a; }
+.dot-in_progress {
+  background: #1890ff;
+  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.2);
+  animation: pulse 1.6s infinite;
+}
+.dot-waiting { background: #faad14; }
+.dot-pending { background: #d9d9d9; }
+.dot-rejected { background: #f5222d; }
 
 @keyframes pulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.3); opacity: 0.7; }
-  100% { transform: scale(1); opacity: 1; }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
 }
-
-/* Advanced Relay Tracker */
-.relay-tracker { display: flex; align-items: flex-start; justify-content: space-around; position: relative; }
-.relay-step { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; }
-.relay-circle { 
-  width: 36px; height: 36px; border-radius: 50%; background: var(--c-bg); border: 3px solid var(--c-border);
-  display: flex; align-items: center; justify-content: center; font-weight: bold; z-index: 2; margin-bottom: 12px;
-  transition: all 0.3s;
+.muted {
+  color: rgba(0, 0, 0, 0.4);
+  font-style: italic;
+  font-size: 12px;
 }
-.relay-line { position: absolute; top: 18px; left: calc(50% + 18px); right: calc(-50% + 18px); height: 3px; background: var(--c-border); z-index: 1; }
-
-.relay-step.completed .relay-circle { background: var(--c-success); border-color: var(--c-success); color: white; }
-.relay-step.completed .relay-line { background: var(--c-success); }
-.relay-step.active .relay-circle { background: var(--c-info); border-color: var(--c-info); color: white; box-shadow: 0 0 15px var(--c-info); }
-.relay-step.waiting .relay-circle { border-color: var(--c-warning); color: var(--c-warning); }
-
-.relay-lab { font-size: 0.7rem; font-weight: bold; color: var(--c-text-muted); text-transform: uppercase; }
-.relay-eq { font-size: 0.85rem; font-weight: 700; margin: 2px 0; }
-.relay-status-text { font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; background: var(--c-bg); border: 1px solid var(--c-border); display: inline-block; }
-
-.active-stage-box { background: rgba(0,0,0,0.03); border: 1px dashed var(--c-border); padding: 12px; border-radius: 8px; font-size: 0.85rem; }
-.rejection-box { background: rgba(255,107,107,.1); border-left: 4px solid var(--c-danger); padding: 12px; font-size: .9rem; color: var(--c-danger); }
+.detail-card :deep(.ant-card-body) {
+  padding: 16px 12px;
+}
+.step-desc {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.remark-block h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
 </style>

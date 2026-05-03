@@ -1,147 +1,269 @@
 <template>
-  <div>
-    <h1 class="page-title">Create Order</h1>
+  <div class="create-page">
+    <a-page-header title="送樣申請" sub-title="選擇實驗類型,Lab Manager 將安排設備與時間" :back-icon="false" />
 
-    <div v-if="success" class="alert-success mb-4">
-      ✅ Order {{ createdOrderNo }} submitted! Status: Waiting for review.
-    </div>
-    <div v-if="error" class="alert-error mb-4">{{ error }}</div>
+    <a-row :gutter="[16, 16]">
+      <a-col :xs="24" :lg="14">
+        <a-card :bordered="false" title="申請表單">
+          <a-result
+            v-if="success"
+            status="success"
+            :title="`訂單 ${createdOrderNo} 已成功送出!`"
+            sub-title="狀態為「等待中」,Lab Manager 將進行排程審核"
+          >
+            <template #extra>
+              <a-button type="primary" @click="resetForm">繼續送樣</a-button>
+              <a-button @click="$router.push('/orders')">查看訂單清單</a-button>
+            </template>
+          </a-result>
 
-    <div class="create-layout">
-      <!-- Main form -->
-      <form class="card" @submit.prevent="handleSubmit">
-        <div class="form-group">
-          <label for="experiment">Experiment</label>
-          <select id="experiment" v-model="form.experiment" required @change="onExperimentChange">
-            <option value="" disabled>Select experiment…</option>
-            <option v-for="exp in experiments" :key="exp.id" :value="exp.id">
-              {{ exp.name }}
-            </option>
-          </select>
-        </div>
+          <a-form
+            v-else
+            :model="form"
+            layout="vertical"
+            @finish="handleSubmit"
+          >
+            <a-form-item
+              label="實驗類型"
+              name="experiment"
+              :rules="[{ required: true, message: '請選擇實驗類型' }]"
+            >
+              <a-select
+                v-model:value="form.experiment"
+                placeholder="請選擇要進行的實驗"
+                show-search
+                option-filter-prop="label"
+                size="large"
+                @change="onExperimentChange"
+                :options="experimentOptions"
+              />
+            </a-form-item>
 
-        <div class="form-group">
-          <label for="lot_id">Lot ID</label>
-          <input id="lot_id" v-model="form.lot_id" placeholder="e.g. LOT-2026-A001" />
-        </div>
+            <a-form-item label="Lot ID" name="lot_id">
+              <a-input
+                v-model:value="form.lot_id"
+                placeholder="例如: LOT-2026-A001"
+                size="large"
+              />
+            </a-form-item>
 
-        <div class="form-group">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" v-model="form.is_urgent" style="width:auto;" />
-            Urgent Request
-          </label>
-        </div>
+            <a-form-item name="is_urgent">
+              <a-checkbox v-model:checked="form.is_urgent">
+                <a-tag color="red" style="margin-right: 6px">緊急</a-tag>
+                標記為緊急訂單(優先排程)
+              </a-checkbox>
+            </a-form-item>
 
-        <div class="form-group">
-          <label for="remark">Remark</label>
-          <textarea id="remark" v-model="form.remark" rows="3"></textarea>
-        </div>
+            <a-form-item label="備註" name="remark">
+              <a-textarea
+                v-model:value="form.remark"
+                :rows="3"
+                placeholder="任何需要 Lab Manager 知道的細節..."
+              />
+            </a-form-item>
 
-        <p class="text-muted" style="font-size:.8rem;margin-bottom:16px;">
-          ℹ️ Schedule time will be determined by the Lab Manager during review.
-        </p>
+            <a-alert
+              type="info"
+              show-icon
+              message="排程時間將由 Lab Manager 在審核階段決定"
+              style="margin-bottom: 16px"
+            />
 
-        <button class="btn btn-primary" :disabled="loading">
-          {{ loading ? 'Submitting…' : 'Submit Order' }}
-        </button>
-      </form>
+            <a-alert
+              v-if="error"
+              type="error"
+              show-icon
+              :message="error"
+              style="margin-bottom: 16px"
+            />
 
-      <!-- Side panel: equipment requirements + capacity alert -->
-      <div v-if="selectedExp" class="side-panel card">
-        <h3 style="font-size:1rem;margin-bottom:12px;">📋 Required Equipment</h3>
-        <ul class="req-list">
-          <li v-for="req in selectedExp.required_equipments" :key="req.id" class="req-item">
-            <span class="req-step">Step {{ req.step_order }}:</span>
-            <span class="req-type">{{ req.equipment_type_name }}</span>
-            <span class="req-lab">({{ req.department_name }})</span>
-          </li>
-        </ul>
+            <a-button
+              type="primary"
+              html-type="submit"
+              :loading="loading"
+              size="large"
+            >
+              <template #icon><SendOutlined /></template>
+              送出申請
+            </a-button>
+          </a-form>
+        </a-card>
+      </a-col>
 
-        <!-- Capacity Alert -->
-        <div v-if="capacity" style="margin-top:16px;">
-          <div v-if="capacity.has_shortage" class="capacity-alert">
-            ⚠️ 設備資源不足，預計排程需延後
-          </div>
-          <div v-else class="capacity-ok">
-            ✅ 設備資源充足
-          </div>
-          <div v-for="d in capacity.details" :key="d.equipment_type" class="capacity-row">
-            <span>{{ d.equipment_type }}</span>
-            <span :class="d.shortage ? 'shortage' : 'sufficient'">
-              {{ d.available }} / {{ d.required }} available
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
+      <a-col :xs="24" :lg="10">
+        <a-card
+          v-if="!form.experiment"
+          :bordered="false"
+          title="設備需求預覽"
+        >
+          <a-empty description="請先選擇實驗類型,系統將顯示所需設備與容量" />
+        </a-card>
+
+        <template v-else>
+          <a-card :bordered="false" title="所需設備清單" class="side-card">
+            <a-list
+              :data-source="selectedExp?.required_equipments || []"
+              size="small"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta>
+                    <template #title>
+                      <a-space>
+                        <a-tag color="blue">Step {{ item.step_order }}</a-tag>
+                        <span class="font-bold">{{ item.equipment_type_name }}</span>
+                      </a-space>
+                    </template>
+                    <template #description>
+                      <span class="muted">{{ item.department_name }} · 數量 {{ item.quantity }}</span>
+                    </template>
+                  </a-list-item-meta>
+                </a-list-item>
+              </template>
+              <template #loadMore>
+                <a-empty
+                  v-if="!(selectedExp?.required_equipments || []).length"
+                  description="此實驗未定義設備需求"
+                />
+              </template>
+            </a-list>
+          </a-card>
+
+          <a-card
+            v-if="capacity"
+            :bordered="false"
+            title="設備容量檢查"
+            class="side-card"
+            style="margin-top: 16px"
+          >
+            <a-alert
+              v-if="capacity.has_shortage"
+              type="warning"
+              show-icon
+              message="設備資源不足"
+              description="預計排程可能延後,請考慮非緊急訂單"
+              style="margin-bottom: 12px"
+            />
+            <a-alert
+              v-else
+              type="success"
+              show-icon
+              message="設備資源充足,可立即排程"
+              style="margin-bottom: 12px"
+            />
+            <a-list
+              :data-source="capacity.details"
+              size="small"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <span>{{ item.equipment_type }}</span>
+                  <a-tag :color="item.shortage ? 'error' : 'success'">
+                    {{ item.available }} / {{ item.required }}
+                  </a-tag>
+                </a-list-item>
+              </template>
+            </a-list>
+          </a-card>
+        </template>
+      </a-col>
+    </a-row>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { fetchExperiments, fetchCapacityCheck } from '../../api/equipments'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { message } from 'ant-design-vue'
+import { SendOutlined } from '@ant-design/icons-vue'
+import { fetchCapacityCheck, fetchExperiments } from '../../api/equipments'
 import { createOrder } from '../../api/orders'
 
 const experiments = ref([])
-const form = ref({ experiment: '', is_urgent: false, lot_id: '', remark: '' })
+const capacity = ref(null)
 const loading = ref(false)
+const error = ref('')
 const success = ref(false)
 const createdOrderNo = ref(null)
-const error = ref('')
-const capacity = ref(null)
 
-const selectedExp = computed(() => experiments.value.find(e => e.id === form.value.experiment))
+const form = reactive({
+  experiment: undefined,
+  is_urgent: false,
+  lot_id: '',
+  remark: '',
+})
+
+const experimentOptions = computed(() =>
+  experiments.value.map((exp) => ({ label: exp.name, value: exp.id })),
+)
+
+const selectedExp = computed(() =>
+  experiments.value.find((e) => e.id === form.experiment),
+)
 
 onMounted(async () => {
-  const { data } = await fetchExperiments()
-  experiments.value = data.results || data
+  try {
+    const { data } = await fetchExperiments()
+    experiments.value = data.results || data
+  } catch {
+    message.error('載入實驗清單失敗')
+  }
 })
 
 async function onExperimentChange() {
   capacity.value = null
-  if (form.value.experiment) {
-    try {
-      const { data } = await fetchCapacityCheck(form.value.experiment)
-      capacity.value = data
-    } catch { /* ignore */ }
+  if (!form.experiment) return
+  try {
+    const { data } = await fetchCapacityCheck(form.experiment)
+    capacity.value = data
+  } catch {
+    /* capacity check 是輔助資訊,失敗不阻止建單 */
   }
 }
 
 async function handleSubmit() {
   error.value = ''
-  success.value = false
   loading.value = true
   try {
-    const { data } = await createOrder(form.value)
+    const { data } = await createOrder(form)
     createdOrderNo.value = data.order_no
     success.value = true
-    form.value = { experiment: '', is_urgent: false, lot_id: '', remark: '' }
-    capacity.value = null
+    message.success(`訂單 ${data.order_no} 建立成功`)
   } catch (e) {
-    error.value = e.response?.data?.detail || JSON.stringify(e.response?.data) || 'Submission failed'
+    const data = e.response?.data
+    if (typeof data === 'string') error.value = data
+    else if (data?.detail) error.value = data.detail
+    else if (data && typeof data === 'object') {
+      const k = Object.keys(data)[0]
+      error.value = `${k}: ${Array.isArray(data[k]) ? data[k].join(', ') : data[k]}`
+    } else error.value = '送出失敗'
   } finally {
     loading.value = false
   }
 }
+
+function resetForm() {
+  form.experiment = undefined
+  form.is_urgent = false
+  form.lot_id = ''
+  form.remark = ''
+  capacity.value = null
+  success.value = false
+  createdOrderNo.value = null
+}
 </script>
 
 <style scoped>
-.create-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
-@media (max-width: 800px) { .create-layout { grid-template-columns: 1fr; } }
-
-.side-panel { position: sticky; top: 32px; }
-
-.alert-success { background:rgba(0,206,201,.12); color:var(--c-success); padding:10px 14px; border-radius:var(--radius); font-size:.9rem; }
-.alert-error { background:rgba(255,107,107,.12); color:var(--c-danger); padding:10px 14px; border-radius:var(--radius); font-size:.9rem; }
-.req-list { list-style:none; padding:0; display: flex; flex-direction: column; gap: 8px; }
-.req-item { font-size:.85rem; display: flex; flex-direction: column; }
-.req-step { font-weight: 700; color: var(--c-text-muted); font-size: 0.7rem; text-transform: uppercase; }
-.req-type { color: var(--c-info); font-weight: 600; }
-.req-lab { color: var(--c-text-muted); font-size: 0.75rem; font-style: italic; }
-
-.capacity-alert { background:rgba(255,107,107,.12); color:var(--c-danger); padding:10px 14px; border-radius:var(--radius); font-size:.85rem; font-weight:600; margin-bottom:8px; }
-.capacity-ok { background:rgba(0,206,201,.12); color:var(--c-success); padding:10px 14px; border-radius:var(--radius); font-size:.85rem; font-weight:600; margin-bottom:8px; }
-.capacity-row { display:flex; justify-content:space-between; padding:4px 0; font-size:.85rem; }
-.shortage { color:var(--c-danger); font-weight:600; }
-.sufficient { color:var(--c-success); }
+.create-page {
+  padding: 0;
+}
+.muted {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+.font-bold {
+  font-weight: 600;
+}
+.side-card :deep(.ant-card-body) {
+  padding: 12px 16px;
+}
 </style>

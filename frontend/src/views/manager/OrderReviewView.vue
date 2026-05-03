@@ -1,438 +1,552 @@
 <template>
-  <div>
-    <div class="mb-6">
-      <h1 class="page-title">Pending Lab Tasks (Waiting)</h1>
-      <p class="text-muted" style="margin-top:-10px;">Review and schedule stages for your laboratory.</p>
-    </div>
+  <div class="review-page">
+    <a-page-header
+      title="訂單審核 / 排程"
+      sub-title="檢視等待中的階段、排程設備時間、指派執行人員"
+      :back-icon="false"
+    >
+      <template #extra>
+        <a-button @click="reloadAll" :loading="loading">
+          <template #icon><ReloadOutlined /></template>
+          重新整理
+        </a-button>
+      </template>
+    </a-page-header>
 
-    <!-- Timeline Chart for Scheduling Awareness -->
-    <TimelineChart 
-      :grouped-equipments="groupedEquipments" 
-      :bookings="allBookings" 
-      class="mb-8" 
-      @booking-click="openEditBooking"
-    />
+    <a-card title="設備時間軸" :bordered="false" class="timeline-wrapper">
+      <TimelineChart
+        :grouped-equipments="groupedEquipments"
+        :bookings="allBookings"
+        @booking-click="openEditBooking"
+      />
+    </a-card>
 
-    <div class="card table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>Order #</th>
-            <th>Step</th>
-            <th>Equipment Type</th>
-            <th>Requester</th>
-            <th>Lot ID</th>
-            <th>Wait Time</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in waitingStages" :key="s.id">
-            <td>{{ s.order_no || '—' }}</td>
-            <td><span class="badge badge-outline">Step {{ s.step_order }}</span></td>
-            <td class="font-bold underline">{{ s.equipment_type_name }}</td>
-            <td>{{ s.user_name || '—' }}</td>
-            <td class="text-muted">{{ s.lot_id || "—" }}</td>
-            <td class="text-muted" style="font-size: 0.8rem">
-              {{ s.wait_duration }}
-            </td>
-            <td>
-              <div class="flex gap-2">
-                <button class="btn btn-success btn-sm" @click="openApprove(s)">
-                  Schedule & Approve
-                </button>
-                <button class="btn btn-danger btn-sm" @click="openReject(s)">
-                  Reject Order
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!waitingStages.length">
-            <td colspan="7" class="text-muted" style="text-align: center">
-              No pending tasks for your lab.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <a-card
+      title="待審核階段 (Waiting)"
+      :bordered="false"
+      style="margin-top: 16px"
+      :body-style="{ padding: 0 }"
+    >
+      <a-table
+        :columns="waitingColumns"
+        :data-source="waitingStages"
+        row-key="id"
+        :pagination="false"
+        :loading="loading"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'step_order'">
+            <a-tag color="blue">Step {{ record.step_order }}</a-tag>
+          </template>
+          <template v-else-if="column.dataIndex === '__actions__'">
+            <a-space>
+              <a-button type="primary" size="small" @click="openApprove(record)">
+                <template #icon><CheckOutlined /></template>
+                排程批准
+              </a-button>
+              <a-button danger size="small" @click="openReject(record)">
+                <template #icon><CloseOutlined /></template>
+                駁回
+              </a-button>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+      <a-empty
+        v-if="!loading && !waitingStages.length"
+        description="目前沒有待審核的階段"
+        style="padding: 40px 0"
+      />
+    </a-card>
 
-    <!-- Approve modal for the SPECIFIC STAGE -->
-    <div v-if="approveTarget" class="modal-overlay" @click.self="approveTarget = null">
-      <div class="card modal-card">
-        <h3 style="margin-bottom: 4px">Approve Stage: {{ approveTarget.equipment_type_name }}</h3>
-        <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 16px">
-          Order: {{ approveTarget.order_no }} | Step {{ approveTarget.step_order }}
-        </p>
+    <a-card
+      title="進行中階段"
+      :bordered="false"
+      style="margin-top: 16px"
+      :body-style="{ padding: 0 }"
+    >
+      <a-table
+        :columns="activeColumns"
+        :data-source="activeStages"
+        row-key="id"
+        :pagination="false"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'step_order'">
+            <a-tag color="blue">Step {{ record.step_order }}</a-tag>
+          </template>
+          <template v-else-if="column.dataIndex === 'assignee_name'">
+            <a-tag v-if="record.assignee_name" color="cyan">
+              <UserOutlined />&nbsp;{{ record.assignee_name }}
+            </a-tag>
+            <span v-else class="muted">尚未指派</span>
+          </template>
+          <template v-else-if="column.dataIndex === 'schedule'">
+            <div class="schedule-cell">
+              <div>{{ formatDate(record.schedule_start) }}</div>
+              <div class="muted">→ {{ formatDate(record.schedule_end) }}</div>
+            </div>
+          </template>
+          <template v-else-if="column.dataIndex === '__actions__'">
+            <a-button type="link" size="small" @click="openReassign(record)">
+              <template #icon><EditOutlined /></template>
+              重新指派
+            </a-button>
+          </template>
+        </template>
+      </a-table>
+      <a-empty
+        v-if="!loading && !activeStages.length"
+        description="目前沒有進行中的階段"
+        style="padding: 40px 0"
+      />
+    </a-card>
 
-        <div v-if="approveError" class="alert-error mb-4">{{ approveError }}</div>
-        <div v-if="scheduleWarning" class="alert-warning mb-4">{{ scheduleWarning }}</div>
+    <a-modal
+      v-model:open="approveOpen"
+      :title="`排程批准:${approveTarget?.equipment_type_name || ''}`"
+      :confirm-loading="approveBusy"
+      ok-text="確認排程"
+      cancel-text="取消"
+      @ok="confirmApprove"
+    >
+      <a-alert
+        v-if="approveError"
+        type="error"
+        :message="approveError"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <a-alert
+        v-if="scheduleWarning"
+        type="warning"
+        :message="scheduleWarning"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <a-form layout="vertical">
+        <a-form-item label="訂單 / 步驟">
+          <a-input
+            :value="`${approveTarget?.order_no} · Step ${approveTarget?.step_order}`"
+            readonly
+          />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="排程開始" required>
+              <a-date-picker
+                v-model:value="scheduleStart"
+                show-time
+                format="YYYY-MM-DD HH:mm"
+                style="width: 100%"
+                @change="validateSchedule"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="排程結束" required>
+              <a-date-picker
+                v-model:value="scheduleEnd"
+                show-time
+                format="YYYY-MM-DD HH:mm"
+                style="width: 100%"
+                @change="validateSchedule"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="指派執行人員 (可選)">
+          <a-select
+            v-model:value="assignee"
+            placeholder="不指派 (站別)"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            :options="memberOptions"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="form-group">
-            <label>Schedule Start</label>
-            <input type="datetime-local" v-model="scheduleStart" @change="validateSchedule" required />
-          </div>
-          <div class="form-group">
-            <label>Schedule End</label>
-            <input type="datetime-local" v-model="scheduleEnd" @change="validateSchedule" required />
-          </div>
-          <div class="form-group col-span-2">
-            <label>Assign Member</label>
-            <select v-model="assignee">
-              <option :value="null">-- Unassigned (Station Group) --</option>
-              <option v-for="u in members" :key="u.id" :value="u.id">
-                {{ u.username }} ({{ u.role }})
-              </option>
-            </select>
-          </div>
-        </div>
+    <a-modal
+      v-model:open="rejectOpen"
+      :title="`駁回訂單 ${rejectTarget?.order_no || ''}`"
+      :ok-button-props="{ danger: true, disabled: !rejectReason.trim() }"
+      ok-text="確認駁回"
+      cancel-text="取消"
+      @ok="confirmReject"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="駁回原因" required>
+          <a-textarea
+            v-model:value="rejectReason"
+            :rows="4"
+            placeholder="請說明駁回理由..."
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
-        <div class="flex gap-2" style="margin-top: 24px">
-          <button class="btn btn-success" @click="confirmApprove" :disabled="approveBusy || !!scheduleWarning">
-            {{ approveBusy ? "Allocating…" : "Confirm Allocation" }}
-          </button>
-          <button class="btn btn-outline" @click="approveTarget = null">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:open="reassignOpen"
+      :title="`重新指派:${reassignTarget?.order_no || ''}`"
+      :confirm-loading="reassignBusy"
+      ok-text="儲存變更"
+      cancel-text="取消"
+      @ok="confirmReassign"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="新執行人員">
+          <a-select
+            v-model:value="reassignAssignee"
+            placeholder="不指派 (站別)"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            :options="memberOptions"
+          />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="調整開始時間">
+              <a-date-picker
+                v-model:value="reassignStart"
+                show-time
+                format="YYYY-MM-DD HH:mm"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="調整結束時間">
+              <a-date-picker
+                v-model:value="reassignEnd"
+                show-time
+                format="YYYY-MM-DD HH:mm"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
 
-    <!-- Reject modal -->
-    <div v-if="rejectTarget" class="modal-overlay" @click.self="rejectTarget = null">
-      <div class="card modal-card" style="max-width: 400px">
-        <h3 style="margin-bottom: 12px">Reject Order {{ rejectTarget.order_no }}</h3>
-        <div class="form-group">
-          <label>Rejection Reason <span style="color: var(--c-danger)">*</span></label>
-          <textarea v-model="rejectReason" rows="3" placeholder="Specify reason..." required></textarea>
-        </div>
-        <div class="flex gap-2">
-          <button class="btn btn-danger" @click="confirmReject" :disabled="!rejectReason.trim()">Confirm Reject</button>
-          <button class="btn btn-outline" @click="rejectTarget = null">Cancel</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Active Tasks for Personnel Reassignment -->
-    <div class="mt-12">
-      <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-        🏃 Managed Tasks (In Progress)
-      </h2>
-      <div class="card table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Order #</th>
-              <th>Step</th>
-              <th>Equipment Type</th>
-              <th>Assignee</th>
-              <th>Schedule</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in activeStages" :key="s.id">
-              <td>{{ s.order_no }}</td>
-              <td><span class="badge badge-outline">Step {{ s.step_order }}</span></td>
-              <td>{{ s.equipment_type_name }}</td>
-              <td>
-                <span v-if="s.assignee_name" class="assignee-badge">👤 {{ s.assignee_name }}</span>
-                <span v-else class="text-muted">Unassigned</span>
-              </td>
-              <td class="text-xs">
-                {{ fmtDt(s.schedule_start) }} <br/> → {{ fmtDt(s.schedule_end) }}
-              </td>
-              <td>
-                <button class="btn btn-outline btn-sm" @click="openReassign(s)">Reassign / Edit</button>
-              </td>
-            </tr>
-            <tr v-if="!activeStages.length">
-              <td colspan="6" class="text-muted" style="text-align: center">No active tasks currently.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Reassign Modal -->
-    <div v-if="reassignTarget" class="modal-overlay" @click.self="reassignTarget = null">
-      <div class="card modal-card" style="max-width: 450px">
-        <h3 style="margin-bottom: 12px">Reassign Task: {{ reassignTarget.order_no }}</h3>
-        
-        <div class="form-group">
-          <label>New Assignee</label>
-          <select v-model="reassignAssignee">
-            <option :value="null">-- Unassigned --</option>
-            <option v-for="u in members" :key="u.id" :value="u.id">{{ u.username }}</option>
-          </select>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="form-group">
-            <label>Adjust Start</label>
-            <input type="datetime-local" v-model="reassignStart" />
-          </div>
-          <div class="form-group">
-            <label>Adjust End</label>
-            <input type="datetime-local" v-model="reassignEnd" />
-          </div>
-        </div>
-
-        <div class="flex gap-2" style="margin-top: 16px">
-          <button class="btn btn-primary" @click="confirmReassign" :disabled="reassignBusy">Save Changes</button>
-          <button class="btn btn-outline" @click="reassignTarget = null">Cancel</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Edit Booking Modal (Timeline) -->
-    <div v-if="editBookingTarget" class="modal-overlay" @click.self="editBookingTarget = null">
-       <!-- ... keep existing edit logic ... -->
-       <div class="card modal-card" style="max-width:400px;">
-        <h3 style="margin-bottom:12px;">Modify Booking: {{ editBookingTarget.order_no }}</h3>
-        <p class="text-muted mb-4">{{ editBookingTarget.equipment_code }} ({{ editBookingTarget.equipment_type_name }})</p>
-        <div v-if="editBookingError" class="alert-error mb-4">{{ editBookingError }}</div>
-        <div class="form-group">
-          <label>Start Time</label>
-          <input type="datetime-local" v-model="editBookingStart" />
-        </div>
-        <div class="form-group">
-          <label>End Time</label>
-          <input type="datetime-local" v-model="editBookingEnd" />
-        </div>
-        <div class="flex gap-2 font-mt-4">
-          <button class="btn btn-primary" @click="saveBookingUpdate" :disabled="editBookingBusy">Save Changes</button>
-          <button class="btn btn-outline" @click="editBookingTarget = null">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <a-modal
+      v-model:open="editBookingOpen"
+      :title="`調整預約:${editBookingTarget?.order_no || ''}`"
+      :confirm-loading="editBookingBusy"
+      ok-text="儲存"
+      cancel-text="取消"
+      @ok="saveBookingUpdate"
+    >
+      <a-alert
+        v-if="editBookingError"
+        type="error"
+        :message="editBookingError"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <a-descriptions :column="1" size="small">
+        <a-descriptions-item label="設備">
+          {{ editBookingTarget?.equipment_code }}
+          ({{ editBookingTarget?.equipment_type_name }})
+        </a-descriptions-item>
+      </a-descriptions>
+      <a-form layout="vertical" style="margin-top: 16px">
+        <a-form-item label="開始時間">
+          <a-date-picker
+            v-model:value="editBookingStart"
+            show-time
+            format="YYYY-MM-DD HH:mm"
+            style="width: 100%"
+          />
+        </a-form-item>
+        <a-form-item label="結束時間">
+          <a-date-picker
+            v-model:value="editBookingEnd"
+            show-time
+            format="YYYY-MM-DD HH:mm"
+            style="width: 100%"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { fetchStages, reviewStage } from "../../api/orders";
-import { fetchBookings } from "../../api/scheduling";
-import TimelineChart from "../../components/TimelineChart.vue";
-import client from "../../api/client";
+import { computed, onMounted, ref } from 'vue'
+import dayjs from 'dayjs'
+import { message } from 'ant-design-vue'
+import {
+  CheckOutlined,
+  CloseOutlined,
+  EditOutlined,
+  ReloadOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
+import { fetchStages, reviewStage } from '../../api/orders'
+import { fetchBookings, updateBooking } from '../../api/scheduling'
+import client from '../../api/client'
+import TimelineChart from '../../components/TimelineChart.vue'
 
-const stages = ref([]);
-const members = ref([]);
-const groupedEquipments = ref([]);
-const allBookings = ref([]);
-const currentUser = ref(null);
+const stages = ref([])
+const members = ref([])
+const groupedEquipments = ref([])
+const allBookings = ref([])
+const loading = ref(false)
 
-// Approve state
-const approveTarget = ref(null);
-const scheduleStart = ref("");
-const scheduleEnd = ref("");
-const assignee = ref(null);
-const approveBusy = ref(false);
-const approveError = ref("");
-const scheduleWarning = ref("");
+const waitingStages = computed(() => stages.value.filter((s) => s.status === 'waiting'))
+const activeStages = computed(() => stages.value.filter((s) => s.status === 'in_progress'))
 
-// Reject state
-const rejectTarget = ref(null);
-const rejectReason = ref("");
+const memberOptions = computed(() =>
+  members.value.map((u) => ({
+    value: u.id,
+    label: `${u.username} (${u.role})`,
+  })),
+)
 
-// Edit Booking (Timeline) state
-const editBookingTarget = ref(null);
-const editBookingStart = ref("");
-const editBookingEnd = ref("");
-const editBookingBusy = ref(false);
-const editBookingError = ref("");
+const waitingColumns = [
+  { title: '訂單編號', dataIndex: 'order_no', width: 200 },
+  { title: '步驟', dataIndex: 'step_order', width: 100 },
+  { title: '設備類型', dataIndex: 'equipment_type_name' },
+  { title: '申請人', dataIndex: 'user_name', width: 140 },
+  { title: 'Lot ID', dataIndex: 'lot_id', width: 120 },
+  { title: '', dataIndex: '__actions__', width: 220, fixed: 'right' },
+]
 
-const waitingStages = computed(() => stages.value.filter(s => s.status === 'waiting'));
-const activeStages = computed(() => stages.value.filter(s => s.status === 'in_progress'));
+const activeColumns = [
+  { title: '訂單編號', dataIndex: 'order_no', width: 200 },
+  { title: '步驟', dataIndex: 'step_order', width: 100 },
+  { title: '設備類型', dataIndex: 'equipment_type_name', width: 160 },
+  { title: '指派人員', dataIndex: 'assignee_name', width: 160 },
+  { title: '排程', dataIndex: 'schedule', width: 240 },
+  { title: '', dataIndex: '__actions__', width: 140, fixed: 'right' },
+]
 
-// Reassign state
-const reassignTarget = ref(null);
-const reassignAssignee = ref(null);
-const reassignStart = ref("");
-const reassignEnd = ref("");
-const reassignBusy = ref(false);
+// Approve modal state
+const approveOpen = ref(false)
+const approveTarget = ref(null)
+const scheduleStart = ref(null)
+const scheduleEnd = ref(null)
+const assignee = ref(null)
+const approveBusy = ref(false)
+const approveError = ref('')
+const scheduleWarning = ref('')
 
-onMounted(async () => {
-  await loadStages();
-  await loadMembers();
-  await loadTimelineData();
-});
+// Reject modal state
+const rejectOpen = ref(false)
+const rejectTarget = ref(null)
+const rejectReason = ref('')
+
+// Reassign modal state
+const reassignOpen = ref(false)
+const reassignTarget = ref(null)
+const reassignAssignee = ref(null)
+const reassignStart = ref(null)
+const reassignEnd = ref(null)
+const reassignBusy = ref(false)
+
+// Booking edit modal state
+const editBookingOpen = ref(false)
+const editBookingTarget = ref(null)
+const editBookingStart = ref(null)
+const editBookingEnd = ref(null)
+const editBookingBusy = ref(false)
+const editBookingError = ref('')
+
+onMounted(reloadAll)
+
+async function reloadAll() {
+  loading.value = true
+  try {
+    await Promise.all([loadStages(), loadMembers(), loadTimelineData()])
+  } finally {
+    loading.value = false
+  }
+}
 
 async function loadStages() {
-  const { data } = await fetchStages(); // Fetch all stages for my lab
-  stages.value = (data.results || data).map(s => ({
-    ...s,
-    wait_duration: s.status === 'waiting' ? 'Pending' : 'In Progress'
-  }));
+  const { data } = await fetchStages()
+  stages.value = data.results || data || []
+}
+
+async function loadMembers() {
+  const { data } = await client.get('/users/')
+  members.value = (data.results || data || []).filter((u) =>
+    ['lab_member', 'lab_manager'].includes(u.role),
+  )
 }
 
 async function loadTimelineData() {
   const [resEq, resBk, resProf] = await Promise.all([
     client.get('/equipments/status-matrix/'),
     fetchBookings(),
-    client.get('/users/profile/')
-  ]);
-  
-  currentUser.value = resProf.data;
-  const myDept = resProf.data.department_name;
-
-  // Filter: Only show equipment types and units belonging to the manager's department
-  groupedEquipments.value = resEq.data.map(type => {
-    return {
+    client.get('/users/profile/'),
+  ])
+  const myDept = resProf.data.department_name
+  groupedEquipments.value = resEq.data
+    .map((type) => ({
       ...type,
-      equipments: type.equipments.filter(eq => eq.department_name === myDept)
-    };
-  }).filter(type => type.equipments.length > 0);
-
-  allBookings.value = resBk.data.results || resBk.data;
-}
-
-async function loadMembers() {
-  const { data } = await client.get("/users/");
-  members.value = (data.results || data).filter(u => ['lab_member', 'lab_manager'].includes(u.role));
+      equipments: type.equipments.filter((eq) => eq.department_name === myDept),
+    }))
+    .filter((type) => type.equipments.length > 0)
+  allBookings.value = resBk.data.results || resBk.data || []
 }
 
 function openApprove(stage) {
-  approveTarget.value = stage;
-  scheduleStart.value = "";
-  scheduleEnd.value = "";
-  assignee.value = null;
-  approveError.value = "";
-  scheduleWarning.value = "";
+  approveTarget.value = stage
+  scheduleStart.value = null
+  scheduleEnd.value = null
+  assignee.value = null
+  approveError.value = ''
+  scheduleWarning.value = ''
+  approveOpen.value = true
 }
 
 function validateSchedule() {
-  scheduleWarning.value = "";
+  scheduleWarning.value = ''
   if (scheduleStart.value && scheduleEnd.value) {
-    const start = new Date(scheduleStart.value);
-    const end = new Date(scheduleEnd.value);
-    const now = new Date();
-    if (end <= start) scheduleWarning.value = "⚠️ End must be after start.";
-    else if (start < now) scheduleWarning.value = "⚠️ Start cannot be in the past.";
+    const now = dayjs()
+    if (scheduleEnd.value.isBefore(scheduleStart.value)) {
+      scheduleWarning.value = '結束時間需晚於開始時間'
+    } else if (scheduleStart.value.isBefore(now)) {
+      scheduleWarning.value = '開始時間不可在過去'
+    }
   }
 }
 
 async function confirmApprove() {
-  approveBusy.value = true;
+  validateSchedule()
+  if (scheduleWarning.value) return
+  if (!scheduleStart.value || !scheduleEnd.value) {
+    approveError.value = '請填寫排程開始與結束時間'
+    return
+  }
+  approveBusy.value = true
   try {
     await reviewStage(approveTarget.value.id, {
-      action: "approve",
-      schedule_start: scheduleStart.value,
-      schedule_end: scheduleEnd.value,
-      assignee: assignee.value
-    });
-    approveTarget.value = null;
-    await Promise.all([loadStages(), loadTimelineData()]);
+      action: 'approve',
+      schedule_start: scheduleStart.value.toISOString(),
+      schedule_end: scheduleEnd.value.toISOString(),
+      assignee: assignee.value,
+    })
+    approveOpen.value = false
+    message.success('排程批准成功')
+    await Promise.all([loadStages(), loadTimelineData()])
   } catch (e) {
-    approveError.value = e.response?.data?.detail || "Approval failed";
+    approveError.value = e.response?.data?.detail || '批准失敗'
   } finally {
-    approveBusy.value = false;
-  }
-}
-
-function toLocalISOString(dateStr) {
-  const date = new Date(dateStr);
-  const tzOffset = date.getTimezoneOffset() * 60000;
-  const localISOTime = (new Date(date - tzOffset)).toISOString().slice(0,16);
-  return localISOTime;
-}
-
-// ... existing code ...
-
-async function openEditBooking(booking) {
-  editBookingTarget.value = booking;
-  editBookingStart.value = toLocalISOString(booking.start);
-  editBookingEnd.value = toLocalISOString(booking.end);
-}
-
-async function saveBookingUpdate() {
-  const start = new Date(editBookingStart.value);
-  const end = new Date(editBookingEnd.value);
-  const now = new Date();
-  
-  if (end <= start) { alert("End time must be after start time."); return; }
-  if (start < now) { alert("Start time cannot be in the past."); return; }
-
-  editBookingBusy.value = true;
-  try {
-    const { updateBooking } = await import("../../api/scheduling");
-    await updateBooking(editBookingTarget.value.id, {
-      started_at: editBookingStart.value,
-      ended_at: editBookingEnd.value
-    });
-    editBookingTarget.value = null;
-    await loadTimelineData();
-  } catch (e) {
-    editBookingError.value = e.response?.data?.detail || "Update failed";
-  } finally {
-    editBookingBusy.value = false;
-  }
-}
-
-function openReassign(stage) {
-  reassignTarget.value = stage;
-  reassignAssignee.value = stage.assignee;
-  reassignStart.value = toLocalISOString(stage.schedule_start);
-  reassignEnd.value = toLocalISOString(stage.schedule_end);
-}
-
-async function confirmReassign() {
-  // Client-side validation
-  const start = new Date(reassignStart.value);
-  const end = new Date(reassignEnd.value);
-  const now = new Date();
-  
-  if (end <= start) { alert("End time must be after start time."); return; }
-  if (start < now) { alert("Start time cannot be in the past."); return; }
-
-  reassignBusy.value = true;
-  try {
-    await reviewStage(reassignTarget.value.id, {
-      action: "reassign",
-      assignee: reassignAssignee.value,
-      schedule_start: reassignStart.value,
-      schedule_end: reassignEnd.value
-    });
-    reassignTarget.value = null;
-    await Promise.all([loadStages(), loadTimelineData()]);
-  } catch (e) {
-    alert("Reassignment failed: " + (e.response?.data?.detail || "Unknown error"));
-  } finally {
-    reassignBusy.value = false;
+    approveBusy.value = false
   }
 }
 
 function openReject(stage) {
-  rejectTarget.value = stage;
-  rejectReason.value = "";
+  rejectTarget.value = stage
+  rejectReason.value = ''
+  rejectOpen.value = true
 }
 
 async function confirmReject() {
-    // Current backend rejects whole order even if only stage is rejected
+  try {
     await reviewStage(rejectTarget.value.id, {
-      action: "reject",
-      rejection_reason: rejectReason.value
-    });
-    rejectTarget.value = null;
-    await loadStages();
+      action: 'reject',
+      rejection_reason: rejectReason.value,
+    })
+    rejectOpen.value = false
+    message.success('已駁回')
+    await loadStages()
+  } catch (e) {
+    message.error(e.response?.data?.detail || '駁回失敗')
+  }
 }
 
-function fmtDt(s) {
-  if (!s) return "—";
-  return new Date(s).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" });
+function openReassign(stage) {
+  reassignTarget.value = stage
+  reassignAssignee.value = stage.assignee || null
+  reassignStart.value = stage.schedule_start ? dayjs(stage.schedule_start) : null
+  reassignEnd.value = stage.schedule_end ? dayjs(stage.schedule_end) : null
+  reassignOpen.value = true
+}
+
+async function confirmReassign() {
+  if (reassignStart.value && reassignEnd.value && reassignEnd.value.isBefore(reassignStart.value)) {
+    message.error('結束時間需晚於開始時間')
+    return
+  }
+  reassignBusy.value = true
+  try {
+    await reviewStage(reassignTarget.value.id, {
+      action: 'reassign',
+      assignee: reassignAssignee.value,
+      schedule_start: reassignStart.value?.toISOString(),
+      schedule_end: reassignEnd.value?.toISOString(),
+    })
+    reassignOpen.value = false
+    message.success('重新指派成功')
+    await Promise.all([loadStages(), loadTimelineData()])
+  } catch (e) {
+    message.error(e.response?.data?.detail || '重新指派失敗')
+  } finally {
+    reassignBusy.value = false
+  }
+}
+
+function openEditBooking(booking) {
+  editBookingTarget.value = booking
+  editBookingStart.value = booking.start ? dayjs(booking.start) : null
+  editBookingEnd.value = booking.end ? dayjs(booking.end) : null
+  editBookingError.value = ''
+  editBookingOpen.value = true
+}
+
+async function saveBookingUpdate() {
+  if (!editBookingStart.value || !editBookingEnd.value) {
+    editBookingError.value = '請填寫完整時間'
+    return
+  }
+  if (editBookingEnd.value.isBefore(editBookingStart.value)) {
+    editBookingError.value = '結束時間需晚於開始時間'
+    return
+  }
+  if (editBookingStart.value.isBefore(dayjs())) {
+    editBookingError.value = '開始時間不可在過去'
+    return
+  }
+  editBookingBusy.value = true
+  try {
+    await updateBooking(editBookingTarget.value.id, {
+      started_at: editBookingStart.value.toISOString(),
+      ended_at: editBookingEnd.value.toISOString(),
+    })
+    editBookingOpen.value = false
+    message.success('預約已更新')
+    await loadTimelineData()
+  } catch (e) {
+    editBookingError.value = e.response?.data?.detail || '更新失敗'
+  } finally {
+    editBookingBusy.value = false
+  }
+}
+
+function formatDate(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
 }
 </script>
 
 <style scoped>
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal-card { width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; background: var(--c-bg-card); position: relative; }
-.alert-error { background: rgba(255,107,107,0.12); color: var(--c-danger); padding: 10px; border-radius: 4px; font-size: 0.85rem; }
-.alert-warning { background: rgba(253,203,110,0.12); color: var(--c-warning); padding: 10px; border-radius: 4px; font-size: 0.85rem; }
-.badge-outline { border: 1px solid var(--c-border); background: transparent; color: var(--c-text-muted); }
-.mb-8 { margin-bottom: 2rem; }
-.mb-6 { margin-bottom: 1.5rem; }
-.grid-cols-2 { grid-template-columns: 1fr 1fr; }
-.col-span-2 { grid-column: span 2; }
-.gap-4 { gap: 1rem; }
-.btn-sm { padding: 4px 8px; font-size: 0.75rem; }
-.mt-12 { margin-top: 3rem; }
-.assignee-badge { background: rgba(116,185,255,0.1); color: var(--c-info); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; border: 1px solid rgba(116,185,255,0.3); }
+.review-page {
+  padding: 0;
+}
+.timeline-wrapper :deep(.ant-card-body) {
+  padding: 16px;
+}
+.muted {
+  color: rgba(0, 0, 0, 0.4);
+  font-style: italic;
+}
+.schedule-cell {
+  font-size: 12px;
+  line-height: 1.6;
+}
 </style>

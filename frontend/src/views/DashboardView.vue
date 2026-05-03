@@ -1,86 +1,243 @@
 <template>
-  <div>
-    <h1 class="page-title">Dashboard</h1>
+  <div class="dash">
+    <a-page-header
+      :title="`歡迎,${auth.user?.username || '使用者'}`"
+      :sub-title="welcomeSub"
+      :back-icon="false"
+    >
+      <template #extra>
+        <a-tag :color="roleColor">
+          <SafetyOutlined />&nbsp;{{ roleLabel }}
+        </a-tag>
+        <a-button v-if="canCreateOrder" type="primary" @click="goCreate">
+          <template #icon><FileAddOutlined /></template>
+          新建訂單
+        </a-button>
+      </template>
+    </a-page-header>
 
-    <div class="stats-grid">
-      <div class="card stat-card">
-        <div class="stat-value">{{ stats.total }}</div>
-        <div class="stat-label">Total Orders</div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-value warning">{{ stats.waiting }}</div>
-        <div class="stat-label">Waiting</div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-value info">{{ stats.in_progress }}</div>
-        <div class="stat-label">In Progress</div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-value success">{{ stats.done }}</div>
-        <div class="stat-label">Done</div>
-      </div>
-    </div>
+    <a-row :gutter="[16, 16]">
+      <a-col :xs="24" :sm="12" :md="6">
+        <a-card hoverable>
+          <a-statistic
+            title="訂單總數"
+            :value="stats.total"
+            :value-style="{ color: '#1890ff' }"
+          >
+            <template #prefix><ProfileOutlined /></template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :sm="12" :md="6">
+        <a-card hoverable>
+          <a-statistic
+            title="等待中"
+            :value="stats.waiting"
+            :value-style="{ color: '#faad14' }"
+          >
+            <template #prefix><ClockCircleOutlined /></template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :sm="12" :md="6">
+        <a-card hoverable>
+          <a-statistic
+            title="進行中"
+            :value="stats.in_progress"
+            :value-style="{ color: '#722ed1' }"
+          >
+            <template #prefix><ThunderboltOutlined /></template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :sm="12" :md="6">
+        <a-card hoverable>
+          <a-statistic
+            title="已完成"
+            :value="stats.done"
+            :value-style="{ color: '#52c41a' }"
+          >
+            <template #prefix><CheckCircleOutlined /></template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+    </a-row>
 
-    <div class="card mt-4">
-      <h2 style="font-size:1.1rem;margin-bottom:12px;">Welcome, {{ auth.user?.username }}</h2>
-      <p class="text-muted">
-        Role: <span class="badge badge-in_progress">{{ auth.user?.role }}</span>
-      </p>
-      <button
-        v-if="auth.isSuperuser"
-        class="admin-entry-btn"
-        @click="router.push('/admin')"
-      >
-        進入管理後台 →
-      </button>
-    </div>
+    <a-row :gutter="[16, 16]" style="margin-top: 16px">
+      <a-col :xs="24" :md="16">
+        <a-card title="最近訂單" :bordered="false" :body-style="{ padding: 0 }">
+          <a-table
+            :columns="orderColumns"
+            :data-source="recentOrders"
+            :pagination="false"
+            :loading="loading"
+            row-key="id"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'status'">
+                <a-tag :color="statusColor(record.status)">
+                  {{ statusLabel(record.status) }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.dataIndex === 'created_at'">
+                {{ formatDate(record.created_at) }}
+              </template>
+              <template v-else-if="column.dataIndex === 'is_urgent'">
+                <a-tag v-if="record.is_urgent" color="red">緊急</a-tag>
+                <span v-else class="muted">—</span>
+              </template>
+            </template>
+          </a-table>
+          <a-empty
+            v-if="!loading && !recentOrders.length"
+            description="目前尚無訂單"
+            style="padding: 40px 0"
+          />
+        </a-card>
+      </a-col>
+
+      <a-col :xs="24" :md="8">
+        <a-card title="快速操作" :bordered="false">
+          <a-space direction="vertical" size="middle" style="width: 100%">
+            <a-button v-if="canCreateOrder" block size="large" type="primary" @click="goCreate">
+              <template #icon><FileAddOutlined /></template>
+              送樣申請
+            </a-button>
+            <a-button v-if="canCreateOrder" block size="large" @click="goOrders">
+              <template #icon><UnorderedListOutlined /></template>
+              我的訂單
+            </a-button>
+            <a-button v-if="auth.isManager" block size="large" @click="goReview">
+              <template #icon><CheckCircleOutlined /></template>
+              審核訂單
+            </a-button>
+            <a-button v-if="auth.isMember" block size="large" @click="goTasks">
+              <template #icon><ThunderboltOutlined /></template>
+              實驗室任務
+            </a-button>
+            <a-button block size="large" @click="goEquipment">
+              <template #icon><AppstoreOutlined /></template>
+              設備總覽
+            </a-button>
+            <a-button v-if="auth.isSuperuser" block size="large" type="primary" ghost @click="goAdmin">
+              <template #icon><DashboardOutlined /></template>
+              管理後台
+            </a-button>
+          </a-space>
+        </a-card>
+      </a-col>
+    </a-row>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import dayjs from 'dayjs'
+import {
+  AppstoreOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DashboardOutlined,
+  FileAddOutlined,
+  ProfileOutlined,
+  SafetyOutlined,
+  ThunderboltOutlined,
+  UnorderedListOutlined,
+} from '@ant-design/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { fetchOrders } from '../api/orders'
 
 const auth = useAuthStore()
 const router = useRouter()
+
 const stats = ref({ total: 0, waiting: 0, in_progress: 0, done: 0 })
+const recentOrders = ref([])
+const loading = ref(false)
+
+const orderColumns = [
+  { title: '訂單編號', dataIndex: 'order_no', width: 180 },
+  { title: '實驗', dataIndex: 'experiment_name' },
+  { title: 'Lot ID', dataIndex: 'lot_id', width: 110 },
+  { title: '緊急', dataIndex: 'is_urgent', width: 80 },
+  { title: '狀態', dataIndex: 'status', width: 110 },
+  { title: '建立時間', dataIndex: 'created_at', width: 170 },
+]
+
+const ROLE_LABELS = {
+  superuser: '系統管理員',
+  lab_manager: '實驗室經理',
+  lab_member: '實驗室成員',
+  regular_employee: '一般員工',
+}
+const ROLE_COLORS = {
+  superuser: 'red',
+  lab_manager: 'geekblue',
+  lab_member: 'cyan',
+  regular_employee: 'default',
+}
+const roleLabel = computed(() => ROLE_LABELS[auth.role] || auth.role || '—')
+const roleColor = computed(() => ROLE_COLORS[auth.role] || 'default')
+
+const welcomeSub = computed(() => {
+  const today = dayjs().format('YYYY-MM-DD dddd')
+  return `今天是 ${today},祝有美好的一天`
+})
+
+const canCreateOrder = computed(
+  () => auth.role === 'regular_employee' || auth.isSuperuser,
+)
 
 onMounted(async () => {
+  loading.value = true
   try {
     const { data } = await fetchOrders()
-    const orders = data.results || data
-    stats.value.total = orders.length
-    stats.value.waiting = orders.filter(o => o.status === 'waiting').length
-    stats.value.in_progress = orders.filter(o => o.status === 'in_progress').length
-    stats.value.done = orders.filter(o => o.status === 'done').length
-  } catch { /* ignore */ }
+    const orders = data.results || data || []
+    stats.value = {
+      total: orders.length,
+      waiting: orders.filter((o) => o.status === 'waiting').length,
+      in_progress: orders.filter((o) => o.status === 'in_progress').length,
+      done: orders.filter((o) => o.status === 'done').length,
+    }
+    recentOrders.value = orders.slice(0, 5)
+  } catch {
+    /* 對於部分角色 (e.g. lab_member 沒 orders 權限) 忽略錯誤 */
+  } finally {
+    loading.value = false
+  }
 })
+
+function statusLabel(s) {
+  return {
+    created: '已建立', waiting: '等待中', in_progress: '進行中',
+    done: '完成', rejected: '駁回',
+  }[s] || s
+}
+function statusColor(s) {
+  return {
+    created: 'default', waiting: 'warning', in_progress: 'processing',
+    done: 'success', rejected: 'error',
+  }[s] || 'default'
+}
+
+function formatDate(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
+}
+
+function goCreate() { router.push('/orders/create') }
+function goOrders() { router.push('/orders') }
+function goReview() { router.push('/orders/review') }
+function goTasks() { router.push('/orders/tasks') }
+function goEquipment() { router.push('/equipment') }
+function goAdmin() { router.push('/admin') }
 </script>
 
 <style scoped>
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
-.stat-card { text-align: center; }
-.stat-value { font-size: 2rem; font-weight: 700; }
-.stat-value.warning { color: var(--c-warning); }
-.stat-value.info { color: var(--c-info); }
-.stat-value.success { color: var(--c-success); }
-.stat-label { font-size: .8rem; color: var(--c-text-muted); text-transform: uppercase; margin-top: 4px; }
-.admin-entry-btn {
-  margin-top: 12px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #1890ff, #722ed1);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.35);
-  transition: transform .15s ease, box-shadow .15s ease;
+.dash {
+  padding: 0;
 }
-.admin-entry-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.5);
+.muted {
+  color: rgba(0, 0, 0, 0.4);
 }
 </style>
