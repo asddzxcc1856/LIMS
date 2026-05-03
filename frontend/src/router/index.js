@@ -13,6 +13,20 @@ import OrderReviewView from '../views/manager/OrderReviewView.vue'
 import OrderTasksView from '../views/member/OrderTasksView.vue'
 import EquipmentDashboardView from '../views/EquipmentDashboardView.vue'
 
+import AdminLayout from '../views/admin/AdminLayout.vue'
+import AdminDashboardView from '../views/admin/DashboardView.vue'
+import AdminActivityLogsView from '../views/admin/ActivityLogsView.vue'
+import AdminFabsView from '../views/admin/FabsView.vue'
+import AdminDepartmentsView from '../views/admin/DepartmentsView.vue'
+import AdminUsersView from '../views/admin/UsersView.vue'
+import AdminExperimentsView from '../views/admin/ExperimentsView.vue'
+import AdminEquipmentTypesView from '../views/admin/EquipmentTypesView.vue'
+import AdminEquipmentView from '../views/admin/EquipmentView.vue'
+import AdminExperimentRequirementsView from '../views/admin/ExperimentRequirementsView.vue'
+import AdminOrdersView from '../views/admin/OrdersView.vue'
+import AdminOrderStagesView from '../views/admin/OrderStagesView.vue'
+import AdminBookingsView from '../views/admin/BookingsView.vue'
+
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { guest: true } },
   { path: '/register', name: 'Register', component: RegisterView, meta: { guest: true } },
@@ -36,6 +50,32 @@ const routes = [
   },
   // Equipment
   { path: '/equipment', name: 'EquipmentDashboard', component: EquipmentDashboardView },
+
+  // Admin (superuser only)
+  {
+    path: '/admin',
+    component: AdminLayout,
+    meta: { roles: ['superuser'] },
+    children: [
+      { path: '', redirect: '/admin/dashboard' },
+      { path: 'dashboard', name: 'AdminDashboard', component: AdminDashboardView },
+      { path: 'logs', name: 'AdminLogs', component: AdminActivityLogsView },
+      { path: 'fabs', name: 'AdminFabs', component: AdminFabsView },
+      { path: 'departments', name: 'AdminDepartments', component: AdminDepartmentsView },
+      { path: 'users', name: 'AdminUsers', component: AdminUsersView },
+      { path: 'experiments', name: 'AdminExperiments', component: AdminExperimentsView },
+      { path: 'equipment-types', name: 'AdminEquipmentTypes', component: AdminEquipmentTypesView },
+      { path: 'equipment', name: 'AdminEquipment', component: AdminEquipmentView },
+      {
+        path: 'experiment-requirements',
+        name: 'AdminExperimentRequirements',
+        component: AdminExperimentRequirementsView,
+      },
+      { path: 'orders', name: 'AdminOrders', component: AdminOrdersView },
+      { path: 'order-stages', name: 'AdminOrderStages', component: AdminOrderStagesView },
+      { path: 'bookings', name: 'AdminBookings', component: AdminBookingsView },
+    ],
+  },
 ]
 
 const router = createRouter({

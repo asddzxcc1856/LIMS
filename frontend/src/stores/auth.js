@@ -15,6 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
   const role = computed(() => user.value?.role || '')
   const isManager = computed(() => ['lab_manager', 'superuser'].includes(role.value))
   const isMember = computed(() => ['lab_member', 'lab_manager', 'superuser'].includes(role.value))
+  const isSuperuser = computed(() => role.value === 'superuser' || !!user.value?.is_superuser)
 
   async function login(username, password) {
     const { data } = await apiLogin(username, password)
@@ -42,5 +43,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refresh_token')
   }
 
-  return { user, accessToken, refreshToken, isLoggedIn, role, isManager, isMember, login, loadProfile, logout }
+  return { user, accessToken, refreshToken, isLoggedIn, role, isManager, isMember, isSuperuser, login, loadProfile, logout }
 })

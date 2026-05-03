@@ -26,16 +26,25 @@
       <p class="text-muted">
         Role: <span class="badge badge-in_progress">{{ auth.user?.role }}</span>
       </p>
+      <button
+        v-if="auth.isSuperuser"
+        class="admin-entry-btn"
+        @click="router.push('/admin')"
+      >
+        進入管理後台 →
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { fetchOrders } from '../api/orders'
 
 const auth = useAuthStore()
+const router = useRouter()
 const stats = ref({ total: 0, waiting: 0, in_progress: 0, done: 0 })
 
 onMounted(async () => {
@@ -58,4 +67,20 @@ onMounted(async () => {
 .stat-value.info { color: var(--c-info); }
 .stat-value.success { color: var(--c-success); }
 .stat-label { font-size: .8rem; color: var(--c-text-muted); text-transform: uppercase; margin-top: 4px; }
+.admin-entry-btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #1890ff, #722ed1);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.35);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.admin-entry-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.5);
+}
 </style>
