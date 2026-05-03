@@ -6,3 +6,4 @@ PyMySQL>=1.1,<2
 redis>=7.4,<8
 celery>=5.6,<6
 gunicorn>=23,<24
+sentry-sdk>=2.20,<3

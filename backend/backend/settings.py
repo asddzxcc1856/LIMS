@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'orders',
     'equipments',
     'scheduling',
+    'monitoring',
 ]
 
 MIDDLEWARE = [
@@ -47,6 +48,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'monitoring.middleware.ActivityLogMiddleware',     # Audit trail – placed last to capture authenticated user
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -171,3 +173,46 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ---------------------------------------------------------------------------
+# Structured logging
+# ---------------------------------------------------------------------------
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO')},
+        'monitoring': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Sentry – optional. Set ``SENTRY_DSN`` to enable.
+# ---------------------------------------------------------------------------
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+            send_default_pii=False,
+            environment=os.environ.get('SENTRY_ENVIRONMENT', 'development'),
+        )
+    except ImportError:
+        pass

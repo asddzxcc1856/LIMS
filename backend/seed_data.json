@@ -80,7 +80,7 @@
   "model": "users.user",
   "pk": "3e075b97-34db-4e43-aff2-bc77f43faf5a",
   "fields": {
-    "password": "pbkdf2_sha256$1000000$ghar5VMyI1B4fcflML3RHh$qhdx7xhX8iRnSGfrSMCYWEvIENFhLEcExugJH9LfbB0=",
+    "password": "pbkdf2_sha256$1000000$GknmDboqn6XGrODbEGkuYi$SZYx1KhaXfFRGoBzaaoB91S71LRVga9RA82/J8Y4WxM=",
     "last_login": "2026-04-28T09:29:53.386Z",
     "is_superuser": true,
     "username": "admin",
@@ -91,7 +91,7 @@
     "is_active": true,
     "date_joined": "2026-04-28T06:04:16.215Z",
     "department": null,
-    "role": "lab_manager",
+    "role": "superuser",
     "status": "active",
     "joined_at": "2026-04-28T06:04:16.409Z",
     "groups": [],
