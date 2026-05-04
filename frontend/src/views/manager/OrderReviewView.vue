@@ -1,19 +1,19 @@
 <template>
   <div class="review-page">
     <a-page-header
-      title="訂單審核 / 排程"
-      sub-title="檢視等待中的階段、排程設備時間、指派執行人員"
+      :title="t('review.title')"
+      :sub-title="t('review.subtitle')"
       :back-icon="false"
     >
       <template #extra>
         <a-button @click="reloadAll" :loading="loading">
           <template #icon><ReloadOutlined /></template>
-          重新整理
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </a-page-header>
 
-    <a-card title="設備時間軸" :bordered="false" class="timeline-wrapper">
+    <a-card :title="t('review.timelineTitle')" :bordered="false" class="timeline-wrapper">
       <TimelineChart
         :grouped-equipments="groupedEquipments"
         :bookings="allBookings"
@@ -22,7 +22,7 @@
     </a-card>
 
     <a-card
-      title="待審核階段 (Waiting)"
+      :title="t('review.waitingStagesTitle')"
       :bordered="false"
       style="margin-top: 16px"
       :body-style="{ padding: 0 }"
@@ -36,17 +36,17 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'step_order'">
-            <a-tag color="blue">Step {{ record.step_order }}</a-tag>
+            <a-tag color="blue">{{ t('review.step') }} {{ record.step_order }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === '__actions__'">
             <a-space>
               <a-button type="primary" size="small" @click="openApprove(record)">
                 <template #icon><CheckOutlined /></template>
-                排程批准
+                {{ t('review.approveSchedule') }}
               </a-button>
               <a-button danger size="small" @click="openReject(record)">
                 <template #icon><CloseOutlined /></template>
-                駁回
+                {{ t('review.reject') }}
               </a-button>
             </a-space>
           </template>
@@ -54,13 +54,13 @@
       </a-table>
       <a-empty
         v-if="!loading && !waitingStages.length"
-        description="目前沒有待審核的階段"
+        :description="t('review.noWaiting')"
         style="padding: 40px 0"
       />
     </a-card>
 
     <a-card
-      title="進行中階段"
+      :title="t('review.activeStagesTitle')"
       :bordered="false"
       style="margin-top: 16px"
       :body-style="{ padding: 0 }"
@@ -73,13 +73,13 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'step_order'">
-            <a-tag color="blue">Step {{ record.step_order }}</a-tag>
+            <a-tag color="blue">{{ t('review.step') }} {{ record.step_order }}</a-tag>
           </template>
           <template v-else-if="column.dataIndex === 'assignee_name'">
             <a-tag v-if="record.assignee_name" color="cyan">
               <UserOutlined />&nbsp;{{ record.assignee_name }}
             </a-tag>
-            <span v-else class="muted">尚未指派</span>
+            <span v-else class="muted">{{ t('common.notAssigned') }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'schedule'">
             <div class="schedule-cell">
@@ -90,24 +90,24 @@
           <template v-else-if="column.dataIndex === '__actions__'">
             <a-button type="link" size="small" @click="openReassign(record)">
               <template #icon><EditOutlined /></template>
-              重新指派
+              {{ t('review.reassign') }}
             </a-button>
           </template>
         </template>
       </a-table>
       <a-empty
         v-if="!loading && !activeStages.length"
-        description="目前沒有進行中的階段"
+        :description="t('review.noActive')"
         style="padding: 40px 0"
       />
     </a-card>
 
     <a-modal
       v-model:open="approveOpen"
-      :title="`排程批准:${approveTarget?.equipment_type_name || ''}`"
+      :title="t('review.approveTitle', { name: approveTarget?.equipment_type_name || '' })"
       :confirm-loading="approveBusy"
-      ok-text="確認排程"
-      cancel-text="取消"
+      :ok-text="t('review.confirmSchedule')"
+      :cancel-text="t('common.cancel')"
       @ok="confirmApprove"
     >
       <a-alert
@@ -125,15 +125,15 @@
         style="margin-bottom: 16px"
       />
       <a-form layout="vertical">
-        <a-form-item label="訂單 / 步驟">
+        <a-form-item :label="t('review.noteOrderStep')">
           <a-input
-            :value="`${approveTarget?.order_no} · Step ${approveTarget?.step_order}`"
+            :value="`${approveTarget?.order_no} · ${t('review.step')} ${approveTarget?.step_order}`"
             readonly
           />
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="排程開始" required>
+            <a-form-item :label="t('review.scheduleStart')" required>
               <a-date-picker
                 v-model:value="scheduleStart"
                 show-time
@@ -144,7 +144,7 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="排程結束" required>
+            <a-form-item :label="t('review.scheduleEnd')" required>
               <a-date-picker
                 v-model:value="scheduleEnd"
                 show-time
@@ -155,10 +155,10 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="指派執行人員 (可選)">
+        <a-form-item :label="t('review.assignTo')">
           <a-select
             v-model:value="assignee"
-            placeholder="不指派 (站別)"
+            :placeholder="t('review.unassigned')"
             allow-clear
             show-search
             option-filter-prop="label"
@@ -170,18 +170,18 @@
 
     <a-modal
       v-model:open="rejectOpen"
-      :title="`駁回訂單 ${rejectTarget?.order_no || ''}`"
+      :title="t('review.rejectTitle', { no: rejectTarget?.order_no || '' })"
       :ok-button-props="{ danger: true, disabled: !rejectReason.trim() }"
-      ok-text="確認駁回"
-      cancel-text="取消"
+      :ok-text="t('review.confirmReject')"
+      :cancel-text="t('common.cancel')"
       @ok="confirmReject"
     >
       <a-form layout="vertical">
-        <a-form-item label="駁回原因" required>
+        <a-form-item :label="t('review.rejectReason')" required>
           <a-textarea
             v-model:value="rejectReason"
             :rows="4"
-            placeholder="請說明駁回理由..."
+            :placeholder="t('review.rejectReasonPrompt')"
           />
         </a-form-item>
       </a-form>
@@ -189,17 +189,17 @@
 
     <a-modal
       v-model:open="reassignOpen"
-      :title="`重新指派:${reassignTarget?.order_no || ''}`"
+      :title="t('review.reassignTitle', { no: reassignTarget?.order_no || '' })"
       :confirm-loading="reassignBusy"
-      ok-text="儲存變更"
-      cancel-text="取消"
+      :ok-text="t('review.saveChanges')"
+      :cancel-text="t('common.cancel')"
       @ok="confirmReassign"
     >
       <a-form layout="vertical">
-        <a-form-item label="新執行人員">
+        <a-form-item :label="t('review.newAssignee')">
           <a-select
             v-model:value="reassignAssignee"
-            placeholder="不指派 (站別)"
+            :placeholder="t('review.unassigned')"
             allow-clear
             show-search
             option-filter-prop="label"
@@ -208,7 +208,7 @@
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="調整開始時間">
+            <a-form-item :label="t('review.adjustStart')">
               <a-date-picker
                 v-model:value="reassignStart"
                 show-time
@@ -218,7 +218,7 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="調整結束時間">
+            <a-form-item :label="t('review.adjustEnd')">
               <a-date-picker
                 v-model:value="reassignEnd"
                 show-time
@@ -233,10 +233,10 @@
 
     <a-modal
       v-model:open="editBookingOpen"
-      :title="`調整預約:${editBookingTarget?.order_no || ''}`"
+      :title="t('review.bookingTitle', { no: editBookingTarget?.order_no || '' })"
       :confirm-loading="editBookingBusy"
-      ok-text="儲存"
-      cancel-text="取消"
+      :ok-text="t('common.save')"
+      :cancel-text="t('common.cancel')"
       @ok="saveBookingUpdate"
     >
       <a-alert
@@ -247,13 +247,13 @@
         style="margin-bottom: 16px"
       />
       <a-descriptions :column="1" size="small">
-        <a-descriptions-item label="設備">
+        <a-descriptions-item :label="t('review.bookingEquipment')">
           {{ editBookingTarget?.equipment_code }}
           ({{ editBookingTarget?.equipment_type_name }})
         </a-descriptions-item>
       </a-descriptions>
       <a-form layout="vertical" style="margin-top: 16px">
-        <a-form-item label="開始時間">
+        <a-form-item :label="t('review.startTime')">
           <a-date-picker
             v-model:value="editBookingStart"
             show-time
@@ -261,7 +261,7 @@
             style="width: 100%"
           />
         </a-form-item>
-        <a-form-item label="結束時間">
+        <a-form-item :label="t('review.endTime')">
           <a-date-picker
             v-model:value="editBookingEnd"
             show-time
@@ -276,8 +276,11 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
+
+const { t } = useI18n()
 import {
   CheckOutlined,
   CloseOutlined,
@@ -306,23 +309,23 @@ const memberOptions = computed(() =>
   })),
 )
 
-const waitingColumns = [
-  { title: '訂單編號', dataIndex: 'order_no', width: 200 },
-  { title: '步驟', dataIndex: 'step_order', width: 100 },
-  { title: '設備類型', dataIndex: 'equipment_type_name' },
-  { title: '申請人', dataIndex: 'user_name', width: 140 },
-  { title: 'Lot ID', dataIndex: 'lot_id', width: 120 },
+const waitingColumns = computed(() => [
+  { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200 },
+  { title: t('review.step'), dataIndex: 'step_order', width: 100 },
+  { title: t('orders.equipmentType'), dataIndex: 'equipment_type_name' },
+  { title: t('review.requester'), dataIndex: 'user_name', width: 140 },
+  { title: t('orders.lotId'), dataIndex: 'lot_id', width: 120 },
   { title: '', dataIndex: '__actions__', width: 220, fixed: 'right' },
-]
+])
 
-const activeColumns = [
-  { title: '訂單編號', dataIndex: 'order_no', width: 200 },
-  { title: '步驟', dataIndex: 'step_order', width: 100 },
-  { title: '設備類型', dataIndex: 'equipment_type_name', width: 160 },
-  { title: '指派人員', dataIndex: 'assignee_name', width: 160 },
-  { title: '排程', dataIndex: 'schedule', width: 240 },
+const activeColumns = computed(() => [
+  { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200 },
+  { title: t('review.step'), dataIndex: 'step_order', width: 100 },
+  { title: t('orders.equipmentType'), dataIndex: 'equipment_type_name', width: 160 },
+  { title: t('review.assignee'), dataIndex: 'assignee_name', width: 160 },
+  { title: t('orders.schedule'), dataIndex: 'schedule', width: 240 },
   { title: '', dataIndex: '__actions__', width: 140, fixed: 'right' },
-]
+])
 
 // Approve modal state
 const approveOpen = ref(false)
@@ -409,9 +412,9 @@ function validateSchedule() {
   if (scheduleStart.value && scheduleEnd.value) {
     const now = dayjs()
     if (scheduleEnd.value.isBefore(scheduleStart.value)) {
-      scheduleWarning.value = '結束時間需晚於開始時間'
+      scheduleWarning.value = t('review.endAfterStart')
     } else if (scheduleStart.value.isBefore(now)) {
-      scheduleWarning.value = '開始時間不可在過去'
+      scheduleWarning.value = t('review.noPastStart')
     }
   }
 }
@@ -420,7 +423,7 @@ async function confirmApprove() {
   validateSchedule()
   if (scheduleWarning.value) return
   if (!scheduleStart.value || !scheduleEnd.value) {
-    approveError.value = '請填寫排程開始與結束時間'
+    approveError.value = t('review.fillTimes')
     return
   }
   approveBusy.value = true
@@ -432,10 +435,10 @@ async function confirmApprove() {
       assignee: assignee.value,
     })
     approveOpen.value = false
-    message.success('排程批准成功')
+    message.success(t('review.approveSuccess'))
     await Promise.all([loadStages(), loadTimelineData()])
   } catch (e) {
-    approveError.value = e.response?.data?.detail || '批准失敗'
+    approveError.value = e.response?.data?.detail || t('review.approveFailed')
   } finally {
     approveBusy.value = false
   }
@@ -454,10 +457,10 @@ async function confirmReject() {
       rejection_reason: rejectReason.value,
     })
     rejectOpen.value = false
-    message.success('已駁回')
+    message.success(t('review.rejectSuccess'))
     await loadStages()
   } catch (e) {
-    message.error(e.response?.data?.detail || '駁回失敗')
+    message.error(e.response?.data?.detail || t('review.rejectFailed'))
   }
 }
 
@@ -471,7 +474,7 @@ function openReassign(stage) {
 
 async function confirmReassign() {
   if (reassignStart.value && reassignEnd.value && reassignEnd.value.isBefore(reassignStart.value)) {
-    message.error('結束時間需晚於開始時間')
+    message.error(t('review.endAfterStart'))
     return
   }
   reassignBusy.value = true
@@ -483,10 +486,10 @@ async function confirmReassign() {
       schedule_end: reassignEnd.value?.toISOString(),
     })
     reassignOpen.value = false
-    message.success('重新指派成功')
+    message.success(t('review.reassignSuccess'))
     await Promise.all([loadStages(), loadTimelineData()])
   } catch (e) {
-    message.error(e.response?.data?.detail || '重新指派失敗')
+    message.error(e.response?.data?.detail || t('review.reassignFailed'))
   } finally {
     reassignBusy.value = false
   }
@@ -502,15 +505,15 @@ function openEditBooking(booking) {
 
 async function saveBookingUpdate() {
   if (!editBookingStart.value || !editBookingEnd.value) {
-    editBookingError.value = '請填寫完整時間'
+    editBookingError.value = t('review.fillBookingTimes')
     return
   }
   if (editBookingEnd.value.isBefore(editBookingStart.value)) {
-    editBookingError.value = '結束時間需晚於開始時間'
+    editBookingError.value = t('review.endAfterStart')
     return
   }
   if (editBookingStart.value.isBefore(dayjs())) {
-    editBookingError.value = '開始時間不可在過去'
+    editBookingError.value = t('review.noPastStart')
     return
   }
   editBookingBusy.value = true
@@ -520,10 +523,10 @@ async function saveBookingUpdate() {
       ended_at: editBookingEnd.value.toISOString(),
     })
     editBookingOpen.value = false
-    message.success('預約已更新')
+    message.success(t('review.bookingSuccess'))
     await loadTimelineData()
   } catch (e) {
-    editBookingError.value = e.response?.data?.detail || '更新失敗'
+    editBookingError.value = e.response?.data?.detail || t('review.bookingFailed')
   } finally {
     editBookingBusy.value = false
   }

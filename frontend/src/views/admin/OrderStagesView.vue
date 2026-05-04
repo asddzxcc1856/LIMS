@@ -1,10 +1,10 @@
 <template>
   <CrudTable
     :resource="adminOrderStages"
-    resource-label="訂單階段"
-    title="訂單階段"
-    subtitle="接力流程的個別階段,每筆訂單依步驟順序執行"
-    search-placeholder="依訂單編號搜尋"
+    :resource-label="t('admin.pages.orderStages.label')"
+    :title="t('admin.pages.orderStages.title')"
+    :subtitle="t('admin.pages.orderStages.subtitle')"
+    :search-placeholder="t('admin.pages.orderStages.search')"
     default-ordering="step_order"
     :columns="columns"
     :form-fields="formFields"
@@ -12,7 +12,8 @@
 </template>
 
 <script setup>
-import { h } from 'vue'
+import { computed, h } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Tag } from 'ant-design-vue'
 import CrudTable from '../../components/admin/CrudTable.vue'
 import {
@@ -24,57 +25,59 @@ import {
   adminUsers,
 } from '../../api/admin'
 
-const statusOptions = [
-  { value: 'pending', label: '待前段' },
-  { value: 'waiting', label: '待指派' },
-  { value: 'in_progress', label: '進行中' },
-  { value: 'done', label: '完成' },
-  { value: 'rejected', label: '駁回' },
-]
+const { t } = useI18n()
+
+const statusOptions = computed(() => [
+  { value: 'pending', label: t('stageStatus.pending') },
+  { value: 'waiting', label: t('stageStatus.waiting') },
+  { value: 'in_progress', label: t('stageStatus.in_progress') },
+  { value: 'done', label: t('stageStatus.done') },
+  { value: 'rejected', label: t('stageStatus.rejected') },
+])
 const statusColor = {
   pending: 'default', waiting: 'warning',
   in_progress: 'processing', done: 'success', rejected: 'error',
 }
 
-const columns = [
-  { title: '訂單編號', dataIndex: 'order_no', width: 200, fixed: 'left' },
-  { title: '步驟', dataIndex: 'step_order', width: 80, sorter: true },
-  { title: '部門', dataIndex: 'department_name', width: 140 },
-  { title: '設備類型', dataIndex: 'equipment_type_name', width: 140 },
-  { title: '已派設備', dataIndex: 'equipment_code', width: 130,
+const columns = computed(() => [
+  { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200, fixed: 'left' },
+  { title: t('review.step'), dataIndex: 'step_order', width: 80, sorter: true },
+  { title: t('admin.nav.departments'), dataIndex: 'department_name', width: 140 },
+  { title: t('orders.equipmentType'), dataIndex: 'equipment_type_name', width: 140 },
+  { title: t('orders.equipmentCode'), dataIndex: 'equipment_code', width: 130,
     customRender: ({ value }) => value || '—' },
-  { title: '指派給', dataIndex: 'assignee_username', width: 140,
+  { title: t('review.assignee'), dataIndex: 'assignee_username', width: 140,
     customRender: ({ value }) => value || '—' },
-  { title: '狀態', dataIndex: 'status', width: 120, sorter: true,
+  { title: t('orders.status'), dataIndex: 'status', width: 120, sorter: true,
     customRender: ({ value }) =>
       h(Tag, { color: statusColor[value] || 'default' }, () =>
-        statusOptions.find((o) => o.value === value)?.label || value,
+        statusOptions.value.find((o) => o.value === value)?.label || value,
       ),
   },
-  { title: '完成時間', dataIndex: 'completed_at', width: 170,
+  { title: t('orders.statusLabels.done'), dataIndex: 'completed_at', width: 170,
     customRender: ({ value }) => value ? value.replace('T', ' ').slice(0, 19) : '—',
   },
-]
+])
 
-const formFields = [
-  { name: 'order', label: '訂單', type: 'select', required: true,
+const formFields = computed(() => [
+  { name: 'order', label: t('admin.nav.orders'), type: 'select', required: true,
     optionsResource: adminOrders, optionLabel: 'order_no', span: 12 },
-  { name: 'step_order', label: '步驟順序', type: 'number', required: true,
+  { name: 'step_order', label: t('review.step'), type: 'number', required: true,
     defaultValue: 1, span: 12 },
-  { name: 'department', label: '執行部門', type: 'select', required: true,
+  { name: 'department', label: t('admin.nav.departments'), type: 'select', required: true,
     optionsResource: adminDepartments, optionLabel: 'name', span: 12 },
-  { name: 'equipment_type', label: '設備類型', type: 'select', required: true,
+  { name: 'equipment_type', label: t('orders.equipmentType'), type: 'select', required: true,
     optionsResource: adminEquipmentTypes, optionLabel: 'name', span: 12 },
-  { name: 'assignee', label: '指派給', type: 'select',
+  { name: 'assignee', label: t('review.assignee'), type: 'select',
     optionsResource: adminUsers, optionLabel: 'username',
     nullableEmpty: true, span: 12 },
-  { name: 'equipment', label: '指派設備', type: 'select',
+  { name: 'equipment', label: t('admin.nav.equipment'), type: 'select',
     optionsResource: adminEquipment, optionLabel: 'code',
     nullableEmpty: true, span: 12 },
-  { name: 'status', label: '狀態', type: 'select', required: true,
-    options: statusOptions, defaultValue: 'pending', span: 12 },
-  { name: 'schedule_start', label: '排程開始', type: 'datetime', span: 12 },
-  { name: 'schedule_end', label: '排程結束', type: 'datetime', span: 12 },
-  { name: 'completed_at', label: '完成時間', type: 'datetime', span: 12 },
-]
+  { name: 'status', label: t('orders.status'), type: 'select', required: true,
+    options: statusOptions.value, defaultValue: 'pending', span: 12 },
+  { name: 'schedule_start', label: t('review.scheduleStart'), type: 'datetime', span: 12 },
+  { name: 'schedule_end', label: t('review.scheduleEnd'), type: 'datetime', span: 12 },
+  { name: 'completed_at', label: t('orders.statusLabels.done'), type: 'datetime', span: 12 },
+])
 </script>

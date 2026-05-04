@@ -1,14 +1,14 @@
 <template>
   <div class="orders-page">
-    <a-page-header title="我的訂單" sub-title="追蹤所有送樣申請的接力進度" :back-icon="false">
+    <a-page-header :title="t('orders.title')" :sub-title="t('orders.subtitle')" :back-icon="false">
       <template #extra>
         <a-button @click="loadOrders" :loading="loading">
           <template #icon><ReloadOutlined /></template>
-          重新整理
+          {{ t('common.refresh') }}
         </a-button>
         <a-button type="primary" @click="$router.push('/orders/create')">
           <template #icon><FileAddOutlined /></template>
-          新建訂單
+          {{ t('nav.createOrder') }}
         </a-button>
       </template>
     </a-page-header>
@@ -18,7 +18,7 @@
       :data-source="orders"
       :loading="loading"
       row-key="id"
-      :pagination="{ pageSize: 10, showTotal: (t) => `共 ${t} 筆` }"
+      :pagination="{ pageSize: 10, showTotal: (n) => t('crud.paginationTotal', { total: n }) }"
       bordered
     >
       <template #bodyCell="{ column, record }">
@@ -34,20 +34,20 @@
             >
               <span class="relay-dot" :class="`dot-${s.status}`"></span>
             </a-tooltip>
-            <span v-if="!(record.stages || []).length" class="muted">無階段</span>
+            <span v-if="!(record.stages || []).length" class="muted">{{ t('orders.noStages') }}</span>
           </div>
         </template>
         <template v-else-if="column.dataIndex === 'status'">
           <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
         </template>
         <template v-else-if="column.dataIndex === 'is_urgent'">
-          <a-tag v-if="record.is_urgent" color="red">緊急</a-tag>
+          <a-tag v-if="record.is_urgent" color="red">{{ t('orders.urgent') }}</a-tag>
           <span v-else class="muted">—</span>
         </template>
         <template v-else-if="column.dataIndex === '__actions__'">
           <a-button type="link" size="small" @click="viewDetail(record)">
             <template #icon><EyeOutlined /></template>
-            檢視
+            {{ t('common.detail') }}
           </a-button>
         </template>
       </template>
@@ -55,12 +55,12 @@
 
     <a-drawer
       v-model:open="detailOpen"
-      :title="selectedOrder ? `訂單詳情:${selectedOrder.order_no}` : ''"
+      :title="selectedOrder ? `${t('orders.detailDrawerTitle')}: ${selectedOrder.order_no}` : ''"
       width="720"
       placement="right"
     >
       <template v-if="selectedOrder">
-        <a-card title="接力進度" :bordered="false" size="small" class="detail-card">
+        <a-card :title="t('orders.relayProgress')" :bordered="false" size="small" class="detail-card">
           <a-steps
             v-if="(selectedOrder.stages || []).length"
             :current="currentStepIndex"
@@ -83,31 +83,31 @@
               </template>
             </a-step>
           </a-steps>
-          <a-empty v-else description="此訂單尚未有階段" />
+          <a-empty v-else :description="t('orders.noRelayStages')" />
         </a-card>
 
         <a-divider />
 
-        <a-descriptions title="一般資訊" bordered :column="2" size="small">
-          <a-descriptions-item label="訂單編號" :span="2">
+        <a-descriptions :title="t('orders.generalInfo')" bordered :column="2" size="small">
+          <a-descriptions-item :label="t('orders.orderNo')" :span="2">
             <code>{{ selectedOrder.order_no }}</code>
           </a-descriptions-item>
-          <a-descriptions-item label="實驗">
+          <a-descriptions-item :label="t('orders.experiment')">
             {{ selectedOrder.experiment_name }}
           </a-descriptions-item>
-          <a-descriptions-item label="Lot ID">
+          <a-descriptions-item :label="t('orders.lotId')">
             {{ selectedOrder.lot_id || '—' }}
           </a-descriptions-item>
-          <a-descriptions-item label="整體狀態">
+          <a-descriptions-item :label="t('orders.overallStatus')">
             <a-tag :color="statusColor(selectedOrder.status)">
               {{ statusLabel(selectedOrder.status) }}
             </a-tag>
           </a-descriptions-item>
-          <a-descriptions-item label="緊急">
-            <a-tag v-if="selectedOrder.is_urgent" color="red">緊急</a-tag>
-            <span v-else>否</span>
+          <a-descriptions-item :label="t('orders.urgent')">
+            <a-tag v-if="selectedOrder.is_urgent" color="red">{{ t('orders.urgent') }}</a-tag>
+            <span v-else>{{ t('common.no') }}</span>
           </a-descriptions-item>
-          <a-descriptions-item label="建立時間" :span="2">
+          <a-descriptions-item :label="t('orders.createdAt')" :span="2">
             {{ formatDate(selectedOrder.created_at) }}
           </a-descriptions-item>
         </a-descriptions>
@@ -116,24 +116,24 @@
 
         <a-descriptions
           v-if="currentStage"
-          title="當前作業站"
+          :title="t('orders.currentStation')"
           bordered
           :column="1"
           size="small"
         >
-          <a-descriptions-item label="實驗室">
+          <a-descriptions-item :label="t('orders.laboratory')">
             {{ currentStage.department_name }}
           </a-descriptions-item>
-          <a-descriptions-item label="設備類型">
+          <a-descriptions-item :label="t('orders.equipmentType')">
             {{ currentStage.equipment_type_name }}
           </a-descriptions-item>
-          <a-descriptions-item label="執行人員">
-            {{ currentStage.assignee_name || '尚未指派' }}
+          <a-descriptions-item :label="t('orders.operator')">
+            {{ currentStage.assignee_name || t('common.notAssigned') }}
           </a-descriptions-item>
-          <a-descriptions-item label="設備代碼">
+          <a-descriptions-item :label="t('orders.equipmentCode')">
             {{ currentStage.equipment_code || 'TBD' }}
           </a-descriptions-item>
-          <a-descriptions-item v-if="currentStage.schedule_start" label="排程">
+          <a-descriptions-item v-if="currentStage.schedule_start" :label="t('orders.schedule')">
             {{ formatDate(currentStage.schedule_start) }}
             →
             {{ formatDate(currentStage.schedule_end) }}
@@ -144,16 +144,16 @@
           v-if="selectedOrder.rejection_reason"
           type="error"
           show-icon
-          :message="`駁回原因:${selectedOrder.rejection_reason}`"
+          :message="`${t('orders.rejectReason')}: ${selectedOrder.rejection_reason}`"
           style="margin-top: 16px"
         />
 
         <a-divider />
 
         <div class="remark-block">
-          <h4>備註</h4>
+          <h4>{{ t('orders.remark') }}</h4>
           <p v-if="selectedOrder.remark">{{ selectedOrder.remark }}</p>
-          <a-empty v-else description="無備註" :image-style="{ height: 40 }" />
+          <a-empty v-else :description="t('orders.noRemark')" :image-style="{ height: 40 }" />
         </div>
       </template>
     </a-drawer>
@@ -162,6 +162,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
 import {
@@ -171,20 +172,22 @@ import {
 } from '@ant-design/icons-vue'
 import { fetchOrder, fetchOrders } from '../../api/orders'
 
+const { t } = useI18n()
+
 const orders = ref([])
 const loading = ref(false)
 const detailOpen = ref(false)
 const selectedOrder = ref(null)
 
-const columns = [
-  { title: '訂單編號', dataIndex: 'order_no', width: 200, fixed: 'left' },
-  { title: '實驗', dataIndex: 'experiment_name', width: 220 },
-  { title: 'Lot ID', dataIndex: 'lot_id', width: 130 },
-  { title: '接力進度', dataIndex: 'progress', width: 200 },
-  { title: '緊急', dataIndex: 'is_urgent', width: 80 },
-  { title: '狀態', dataIndex: 'status', width: 110 },
+const columns = computed(() => [
+  { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200, fixed: 'left' },
+  { title: t('orders.experiment'), dataIndex: 'experiment_name', width: 220 },
+  { title: t('orders.lotId'), dataIndex: 'lot_id', width: 130 },
+  { title: t('orders.progress'), dataIndex: 'progress', width: 200 },
+  { title: t('orders.urgent'), dataIndex: 'is_urgent', width: 80 },
+  { title: t('orders.status'), dataIndex: 'status', width: 110 },
   { title: '', dataIndex: '__actions__', width: 100, fixed: 'right' },
-]
+])
 
 onMounted(loadOrders)
 
@@ -194,7 +197,7 @@ async function loadOrders() {
     const { data } = await fetchOrders()
     orders.value = data.results || data || []
   } catch (e) {
-    message.error('載入訂單失敗')
+    message.error(t('orders.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -206,7 +209,7 @@ async function viewDetail(record) {
     selectedOrder.value = data
     detailOpen.value = true
   } catch {
-    message.error('載入訂單詳情失敗')
+    message.error(t('orders.loadDetailFailed'))
   }
 }
 
@@ -239,10 +242,7 @@ function stepStatus(stage) {
 }
 
 function statusLabel(s) {
-  return {
-    created: '已建立', waiting: '等待中', pending: '待前段',
-    in_progress: '進行中', done: '完成', rejected: '駁回',
-  }[s] || s
+  return t(`orders.statusLabels.${s}`, s)
 }
 function statusColor(s) {
   return {

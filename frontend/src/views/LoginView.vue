@@ -118,7 +118,7 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: linear-gradient(135deg, #eff6ff 0%, #ede9fe 100%);
+  background: var(--c-auth-gradient);
 }
 
 .auth-bg-blob {
@@ -131,12 +131,12 @@ async function handleLogin() {
   pointer-events: none;
 }
 .auth-bg-blob--purple {
-  background: #a78bfa;
+  background: var(--c-auth-blob-1);
   top: -100px;
   left: -120px;
 }
 .auth-bg-blob--blue {
-  background: #60a5fa;
+  background: var(--c-auth-blob-2);
   bottom: -120px;
   right: -120px;
 }
@@ -147,8 +147,8 @@ async function handleLogin() {
   width: 100%;
   max-width: 420px;
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--c-auth-shadow);
+  background: var(--c-auth-card-bg);
   backdrop-filter: blur(8px);
 }
 
@@ -174,7 +174,7 @@ async function handleLogin() {
 .brand-subtitle {
   margin: 0;
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--c-text-muted);
   letter-spacing: 0.6px;
   text-transform: uppercase;
 }

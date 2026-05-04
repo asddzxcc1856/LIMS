@@ -168,7 +168,7 @@ async function handleRegister() {
   justify-content: center;
   overflow: hidden;
   padding: 24px 0;
-  background: linear-gradient(135deg, #eff6ff 0%, #ede9fe 100%);
+  background: var(--c-auth-gradient);
 }
 .auth-bg-blob {
   position: absolute;
@@ -180,12 +180,12 @@ async function handleRegister() {
   pointer-events: none;
 }
 .auth-bg-blob--purple {
-  background: #a78bfa;
+  background: var(--c-auth-blob-1);
   top: -100px;
   left: -120px;
 }
 .auth-bg-blob--blue {
-  background: #60a5fa;
+  background: var(--c-auth-blob-2);
   bottom: -120px;
   right: -120px;
 }
@@ -195,8 +195,8 @@ async function handleRegister() {
   width: 100%;
   max-width: 480px;
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--c-auth-shadow);
+  background: var(--c-auth-card-bg);
   backdrop-filter: blur(8px);
 }
 .auth-brand {
@@ -220,12 +220,12 @@ async function handleRegister() {
 .brand-subtitle {
   margin: 0;
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--c-text-muted);
 }
 .back-link {
   text-align: center;
   margin-top: 16px;
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--c-text-muted);
 }
 </style>

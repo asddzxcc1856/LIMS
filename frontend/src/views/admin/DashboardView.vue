@@ -1,13 +1,17 @@
 <template>
   <div class="dash">
-    <a-page-header title="系統儀表板" sub-title="即時監控訂單流轉、設備使用、活動量">
+    <a-page-header :title="t('admin.dashboard.title')" :sub-title="t('admin.dashboard.subtitle')">
       <template #extra>
-        <a-tooltip title="自動每 30 秒重新整理">
-          <a-switch v-model:checked="autoRefresh" checked-children="自動更新" un-checked-children="手動" />
+        <a-tooltip :title="t('admin.dashboard.autoRefresh')">
+          <a-switch
+            v-model:checked="autoRefresh"
+            :checked-children="t('admin.dashboard.autoOn')"
+            :un-checked-children="t('admin.dashboard.autoOff')"
+          />
         </a-tooltip>
         <a-button @click="load" :loading="loading">
           <template #icon><ReloadOutlined /></template>
-          重新整理
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </a-page-header>
@@ -18,14 +22,14 @@
           <a-col :xs="24" :sm="12" :md="6">
             <a-card hoverable>
               <a-statistic
-                title="總訂單數"
+                :title="t('admin.dashboard.kpiTotalOrders')"
                 :value="stats.orders.total"
                 :value-style="{ color: '#1890ff' }"
               >
                 <template #prefix><ProfileOutlined /></template>
               </a-statistic>
               <div class="stat-foot">
-                近 7 日新增 {{ stats.orders.created_last_7d }} 筆
+                {{ t('admin.dashboard.since7dHint', { n: stats.orders.created_last_7d }) }}
               </div>
             </a-card>
           </a-col>
@@ -33,14 +37,14 @@
           <a-col :xs="24" :sm="12" :md="6">
             <a-card hoverable>
               <a-statistic
-                title="進行中訂單"
+                :title="t('admin.dashboard.kpiInProgress')"
                 :value="stats.orders.by_status.in_progress || 0"
                 :value-style="{ color: '#fa8c16' }"
               >
                 <template #prefix><ThunderboltOutlined /></template>
               </a-statistic>
               <div class="stat-foot">
-                等待中 {{ stats.orders.by_status.waiting || 0 }} 筆
+                {{ t('admin.dashboard.waitingHint', { n: stats.orders.by_status.waiting || 0 }) }}
               </div>
             </a-card>
           </a-col>
@@ -48,7 +52,7 @@
           <a-col :xs="24" :sm="12" :md="6">
             <a-card hoverable>
               <a-statistic
-                title="設備使用率"
+                :title="t('admin.dashboard.kpiEquipmentUsage')"
                 :value="equipmentUsage"
                 :precision="1"
                 suffix="%"
@@ -57,8 +61,10 @@
                 <template #prefix><ToolOutlined /></template>
               </a-statistic>
               <div class="stat-foot">
-                {{ stats.equipment.by_status.occupied || 0 }} /
-                {{ stats.equipment.total }} 占用中
+                {{ t('admin.dashboard.occupiedHint', {
+                    n: stats.equipment.by_status.occupied || 0,
+                    total: stats.equipment.total,
+                }) }}
               </div>
             </a-card>
           </a-col>
@@ -66,14 +72,14 @@
           <a-col :xs="24" :sm="12" :md="6">
             <a-card hoverable>
               <a-statistic
-                title="24 小時 API 流量"
+                :title="t('admin.dashboard.kpi24hTraffic')"
                 :value="stats.activity.last_24h_total"
                 :value-style="{ color: '#722ed1' }"
               >
                 <template #prefix><ApiOutlined /></template>
               </a-statistic>
               <div class="stat-foot">
-                平均回應 {{ stats.activity.avg_duration_ms_24h }} ms
+                {{ t('admin.dashboard.avgRespHint', { ms: stats.activity.avg_duration_ms_24h }) }}
               </div>
             </a-card>
           </a-col>
@@ -81,7 +87,7 @@
 
         <a-row :gutter="[16, 16]" style="margin-top: 16px">
           <a-col :xs="24" :md="12">
-            <a-card title="訂單狀態分布" :bordered="false">
+            <a-card :title="t('admin.dashboard.orderStatusDist')" :bordered="false">
               <a-list :data-source="orderStatusList" size="small">
                 <template #renderItem="{ item }">
                   <a-list-item>
@@ -102,7 +108,7 @@
           </a-col>
 
           <a-col :xs="24" :md="12">
-            <a-card title="設備狀態分布" :bordered="false">
+            <a-card :title="t('admin.dashboard.equipmentStatusDist')" :bordered="false">
               <a-list :data-source="equipmentStatusList" size="small">
                 <template #renderItem="{ item }">
                   <a-list-item>
@@ -125,7 +131,7 @@
 
         <a-row :gutter="[16, 16]" style="margin-top: 16px">
           <a-col :xs="24" :md="12">
-            <a-card title="使用者角色分布" :bordered="false">
+            <a-card :title="t('admin.dashboard.userRoleDist')" :bordered="false">
               <a-row :gutter="[8, 8]">
                 <a-col :span="12" v-for="(value, key) in stats.users.by_role" :key="key">
                   <a-statistic
@@ -137,16 +143,16 @@
               </a-row>
               <a-divider style="margin: 12px 0" />
               <div class="footer-note">
-                共 {{ stats.users.total }} 位使用者,啟用 {{ stats.users.active }} 位
+                {{ t('admin.dashboard.totalUsers', { total: stats.users.total, active: stats.users.active }) }}
               </div>
             </a-card>
           </a-col>
 
           <a-col :xs="24" :md="12">
-            <a-card title="24 小時操作類型分布" :bordered="false">
+            <a-card :title="t('admin.dashboard.action24hDist')" :bordered="false">
               <a-empty
                 v-if="!Object.keys(stats.activity.last_24h_by_action).length"
-                description="無近期活動"
+                :description="t('admin.dashboard.noRecent')"
               />
               <a-list v-else :data-source="actionsList" size="small">
                 <template #renderItem="{ item }">
@@ -169,13 +175,13 @@
         </a-row>
 
         <a-card
-          title="最近活動"
+          :title="t('admin.dashboard.recentActivity')"
           :bordered="false"
           style="margin-top: 16px"
           :body-style="{ padding: 0 }"
         >
           <template #extra>
-            <a-button type="link" @click="goToLogs">查看全部</a-button>
+            <a-button type="link" @click="goToLogs">{{ t('common.viewAll') }}</a-button>
           </template>
           <a-table
             :columns="logColumns"
@@ -205,7 +211,7 @@
         </a-card>
 
         <div class="generated-at">
-          資料生成於 {{ formatDate(stats.generated_at) }}
+          {{ t('admin.dashboard.generatedAt', { time: formatDate(stats.generated_at) }) }}
         </div>
       </template>
     </a-skeleton>
@@ -215,6 +221,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import {
   ApiOutlined,
@@ -226,6 +233,7 @@ import {
 import { fetchActivityLogs, fetchAdminDashboard } from '../../api/admin'
 
 const router = useRouter()
+const { t } = useI18n()
 const stats = ref(null)
 const loading = ref(false)
 const recentLogs = ref([])
@@ -233,15 +241,15 @@ const logsLoading = ref(false)
 const autoRefresh = ref(true)
 let timer = null
 
-const logColumns = [
-  { title: '時間', dataIndex: 'timestamp', width: 170 },
-  { title: '使用者', dataIndex: 'username', width: 140 },
-  { title: '動作', dataIndex: 'action_type', width: 100 },
-  { title: '方法', dataIndex: 'http_method', width: 80 },
-  { title: '路徑', dataIndex: 'path', ellipsis: true },
-  { title: '狀態', dataIndex: 'status_code', width: 80 },
-  { title: '耗時 (ms)', dataIndex: 'duration_ms', width: 100 },
-]
+const logColumns = computed(() => [
+  { title: t('admin.logs.colTime'), dataIndex: 'timestamp', width: 170 },
+  { title: t('admin.logs.colUser'), dataIndex: 'username', width: 140 },
+  { title: t('admin.logs.colAction'), dataIndex: 'action_type', width: 100 },
+  { title: t('admin.logs.colMethod'), dataIndex: 'http_method', width: 80 },
+  { title: t('admin.logs.colPath'), dataIndex: 'path', ellipsis: true },
+  { title: t('admin.logs.colStatus'), dataIndex: 'status_code', width: 80 },
+  { title: t('admin.logs.colDuration'), dataIndex: 'duration_ms', width: 100 },
+])
 
 const orderStatusList = computed(() =>
   stats.value
@@ -315,12 +323,9 @@ function percentOf(value, total) {
 }
 
 function statusLabel(key) {
-  const map = {
-    available: '可用', occupied: '占用中', maintenance: '維修', inactive: '停用',
-    pending: '待處理', waiting: '等待中', in_progress: '進行中', done: '完成',
-    rejected: '駁回', created: '已建立',
-  }
-  return map[key] || key
+  // Stage / order / equipment statuses share keys; try the three catalogue
+  // namespaces in order so we always get a meaningful translation.
+  return t(`equipmentStatus.${key}`, t(`orders.statusLabels.${key}`, t(`stageStatus.${key}`, key)))
 }
 function statusColor(key) {
   const map = {
@@ -341,13 +346,7 @@ function statusHex(key) {
 }
 
 function roleLabel(key) {
-  const map = {
-    superuser: '系統管理員',
-    lab_manager: '實驗室經理',
-    lab_member: '實驗室成員',
-    regular_employee: '一般員工',
-  }
-  return map[key] || key
+  return t(`roles.${key}`, key)
 }
 function roleHex(key) {
   const map = {
@@ -360,11 +359,7 @@ function roleHex(key) {
 }
 
 function actionLabel(key) {
-  const map = {
-    login: '登入', logout: '登出', create: '新增', read: '讀取',
-    update: '更新', delete: '刪除', other: '其他',
-  }
-  return map[key] || key
+  return t(`admin.actions.${key}`, key)
 }
 function actionColor(key) {
   const map = {

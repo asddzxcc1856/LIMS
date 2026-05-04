@@ -1,10 +1,10 @@
 <template>
   <CrudTable
     :resource="adminBookings"
-    resource-label="設備預約"
-    title="設備預約"
-    subtitle="個別設備在指定時段的占用紀錄"
-    search-placeholder="依訂單編號或設備代碼搜尋"
+    :resource-label="t('admin.pages.bookings.label')"
+    :title="t('admin.pages.bookings.title')"
+    :subtitle="t('admin.pages.bookings.subtitle')"
+    :search-placeholder="t('admin.pages.bookings.search')"
     default-ordering="-started_at"
     :columns="columns"
     :form-fields="formFields"
@@ -12,6 +12,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import CrudTable from '../../components/admin/CrudTable.vue'
 import {
   adminBookings,
@@ -20,27 +22,28 @@ import {
   adminOrders,
 } from '../../api/admin'
 
-const columns = [
-  { title: '訂單編號', dataIndex: 'order_no', width: 200, fixed: 'left' },
-  { title: '設備代碼', dataIndex: 'equipment_code', width: 160 },
-  { title: '開始時間', dataIndex: 'started_at', width: 180, sorter: true,
-    customRender: ({ value }) => value ? value.replace('T', ' ').slice(0, 19) : '—',
-  },
-  { title: '結束時間', dataIndex: 'ended_at', width: 180, sorter: true,
-    customRender: ({ value }) => value ? value.replace('T', ' ').slice(0, 19) : '—',
-  },
-]
+const { t } = useI18n()
 
-const formFields = [
-  { name: 'order', label: '訂單', type: 'select', required: true,
+const columns = computed(() => [
+  { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200, fixed: 'left' },
+  { title: t('orders.equipmentCode'), dataIndex: 'equipment_code', width: 160 },
+  { title: t('review.startTime'), dataIndex: 'started_at', width: 180, sorter: true,
+    customRender: ({ value }) => value ? value.replace('T', ' ').slice(0, 19) : '—',
+  },
+  { title: t('review.endTime'), dataIndex: 'ended_at', width: 180, sorter: true,
+    customRender: ({ value }) => value ? value.replace('T', ' ').slice(0, 19) : '—',
+  },
+])
+
+const formFields = computed(() => [
+  { name: 'order', label: t('admin.nav.orders'), type: 'select', required: true,
     optionsResource: adminOrders, optionLabel: 'order_no', span: 12 },
-  { name: 'equipment', label: '設備', type: 'select', required: true,
+  { name: 'equipment', label: t('admin.nav.equipment'), type: 'select', required: true,
     optionsResource: adminEquipment, optionLabel: 'code', span: 12 },
-  { name: 'stage', label: '對應階段', type: 'select',
+  { name: 'stage', label: t('admin.nav.orderStages'), type: 'select',
     optionsResource: adminOrderStages, optionLabel: 'order_no',
-    nullableEmpty: true, span: 12,
-    help: '可選:綁定到特定的 OrderStage' },
-  { name: 'started_at', label: '開始時間', type: 'datetime', required: true, span: 12 },
-  { name: 'ended_at', label: '結束時間', type: 'datetime', required: true, span: 12 },
-]
+    nullableEmpty: true, span: 12 },
+  { name: 'started_at', label: t('review.startTime'), type: 'datetime', required: true, span: 12 },
+  { name: 'ended_at', label: t('review.endTime'), type: 'datetime', required: true, span: 12 },
+])
 </script>

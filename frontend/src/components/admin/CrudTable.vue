@@ -9,18 +9,18 @@
       <template #extra>
         <a-input-search
           v-model:value="searchText"
-          :placeholder="searchPlaceholder"
+          :placeholder="searchPlaceholder || t('crud.searchPlaceholder')"
           allow-clear
           style="width: 280px"
           @search="onSearch"
         />
         <a-button type="primary" @click="openCreate">
           <template #icon><PlusOutlined /></template>
-          新增
+          {{ t('crud.new') }}
         </a-button>
         <a-button @click="loadData">
           <template #icon><ReloadOutlined /></template>
-          重新整理
+          {{ t('crud.refresh') }}
         </a-button>
       </template>
     </a-page-header>
@@ -40,18 +40,18 @@
           <a-space>
             <a-button size="small" type="link" @click="openEdit(record)">
               <template #icon><EditOutlined /></template>
-              編輯
+              {{ t('crud.edit') }}
             </a-button>
             <a-popconfirm
-              :title="`確定要刪除這筆 ${resourceLabel} 嗎?`"
-              ok-text="刪除"
+              :title="t('crud.confirmDelete', { label: resourceLabel })"
+              :ok-text="t('crud.okText')"
               ok-type="danger"
-              cancel-text="取消"
+              :cancel-text="t('crud.cancel')"
               @confirm="onDelete(record)"
             >
               <a-button size="small" type="link" danger>
                 <template #icon><DeleteOutlined /></template>
-                刪除
+                {{ t('crud.delete') }}
               </a-button>
             </a-popconfirm>
           </a-space>
@@ -78,8 +78,8 @@
       :confirm-loading="submitting"
       width="640px"
       :mask-closable="false"
-      ok-text="儲存"
-      cancel-text="取消"
+      :ok-text="t('crud.save')"
+      :cancel-text="t('crud.cancel')"
       @ok="onSubmit"
       @cancel="modalOpen = false"
     >
@@ -126,6 +126,7 @@
 
 <script setup>
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
 import {
@@ -134,6 +135,8 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons-vue'
+
+const { t } = useI18n()
 
 const props = defineProps({
   resource: { type: Object, required: true },
@@ -164,7 +167,7 @@ const pagination = reactive({
   total: 0,
   showSizeChanger: true,
   pageSizeOptions: ['10', '20', '50', '100'],
-  showTotal: (total) => `共 ${total} 筆`,
+  showTotal: (total) => t('crud.paginationTotal', { total }),
 })
 
 const modalOpen = ref(false)
@@ -178,12 +181,14 @@ const dynamicOptions = reactive({})
 
 const isEditing = computed(() => editingId.value !== null)
 const modalTitle = computed(() =>
-  `${isEditing.value ? '編輯' : '新增'} ${props.resourceLabel}`,
+  isEditing.value
+    ? t('crud.editingTitle', { label: props.resourceLabel })
+    : t('crud.addingTitle', { label: props.resourceLabel }),
 )
 
 const tableColumns = computed(() => [
   ...props.columns,
-  { title: '操作', dataIndex: '__actions__', width: 160, fixed: 'right' },
+  { title: t('crud.actions'), dataIndex: '__actions__', width: 160, fixed: 'right' },
 ])
 
 const visibleFields = computed(() =>
@@ -227,7 +232,7 @@ async function loadData() {
     rows.value = data.results || []
     pagination.total = data.count || 0
   } catch (e) {
-    handleApiError(e, '載入失敗')
+    handleApiError(e, t('crud.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -287,15 +292,15 @@ async function onSubmit() {
     const payload = buildPayload()
     if (isEditing.value) {
       await props.resource.update(editingId.value, payload)
-      message.success(`已更新 ${props.resourceLabel}`)
+      message.success(t('crud.updatedSuccess', { label: props.resourceLabel }))
     } else {
       await props.resource.create(payload)
-      message.success(`已新增 ${props.resourceLabel}`)
+      message.success(t('crud.addedSuccess', { label: props.resourceLabel }))
     }
     modalOpen.value = false
     loadData()
   } catch (e) {
-    handleApiError(e, '儲存失敗')
+    handleApiError(e, t('crud.addFailed'))
   } finally {
     submitting.value = false
   }
@@ -320,13 +325,13 @@ function buildPayload() {
 async function onDelete(record) {
   try {
     await props.resource.remove(record[props.rowKey])
-    message.success(`已刪除 ${props.resourceLabel}`)
+    message.success(t('crud.deletedSuccess', { label: props.resourceLabel }))
     if (rows.value.length === 1 && pagination.current > 1) {
       pagination.current -= 1
     }
     loadData()
   } catch (e) {
-    handleApiError(e, '刪除失敗')
+    handleApiError(e, t('crud.deleteFailed'))
   }
 }
 
@@ -390,10 +395,10 @@ function resolveRules(field) {
   if (field.rules) return field.rules
   const rules = []
   if (field.required && !(field.writeOnly && isEditing.value)) {
-    rules.push({ required: true, message: `${field.label} 為必填` })
+    rules.push({ required: true, message: t('crud.requiredField', { label: field.label }) })
   }
   if (field.type === 'password' && !field.writeOnly) {
-    rules.push({ min: 8, message: '密碼至少 8 字元' })
+    rules.push({ min: 8, message: t('crud.minPassword') })
   }
   return rules
 }

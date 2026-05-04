@@ -12,12 +12,23 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
 vi.mock('ant-design-vue', () => ({
   message: { success: vi.fn(), error: vi.fn() },
 }))
 
 import CrudTable from '../src/components/admin/CrudTable.vue'
+import zhTW from '../src/i18n/zh-TW'
+
+function makeI18n() {
+  return createI18n({
+    legacy: false,
+    locale: 'zh-TW',
+    fallbackLocale: 'zh-TW',
+    messages: { 'zh-TW': zhTW },
+  })
+}
 
 const STUBS = [
   'a-page-header', 'a-input-search', 'a-button', 'a-table',
@@ -55,7 +66,7 @@ async function mountTable(props = {}) {
       formFields: defaultFormFields,
       ...props,
     },
-    global: { stubs: STUBS },
+    global: { plugins: [makeI18n()], stubs: STUBS },
   })
   await flushPromises()
   return wrapper

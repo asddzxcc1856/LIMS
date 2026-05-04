@@ -1,10 +1,10 @@
 <template>
   <CrudTable
     :resource="adminDepartments"
-    resource-label="部門"
-    title="部門"
-    subtitle="管理 FAB 之下的部門結構"
-    search-placeholder="依部門名稱或 FAB 名稱搜尋"
+    :resource-label="t('admin.pages.departments.label')"
+    :title="t('admin.pages.departments.title')"
+    :subtitle="t('admin.pages.departments.subtitle')"
+    :search-placeholder="t('admin.pages.departments.search')"
     default-ordering="name"
     :columns="columns"
     :form-fields="formFields"
@@ -12,19 +12,23 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import CrudTable from '../../components/admin/CrudTable.vue'
 import { adminDepartments, adminFabs } from '../../api/admin'
 
-const columns = [
-  { title: 'FAB', dataIndex: 'fab_name', width: 160 },
-  { title: '部門名稱', dataIndex: 'name', sorter: true },
-  { title: '成員數', dataIndex: 'member_count', width: 100 },
-]
+const { t } = useI18n()
 
-const formFields = [
+const columns = computed(() => [
+  { title: 'FAB', dataIndex: 'fab_name', width: 160 },
+  { title: t('admin.nav.departments'), dataIndex: 'name', sorter: true },
+  { title: t('admin.nav.users'), dataIndex: 'member_count', width: 100 },
+])
+
+const formFields = computed(() => [
   {
     name: 'fab',
-    label: '所屬 FAB',
+    label: 'FAB',
     type: 'select',
     required: true,
     optionsResource: adminFabs,
@@ -32,10 +36,10 @@ const formFields = [
   },
   {
     name: 'name',
-    label: '部門名稱',
+    label: t('admin.nav.departments'),
     type: 'text',
     required: true,
-    placeholder: '例如: Photo, Process, QC',
+    placeholder: 'Photo / Process / QC',
   },
-]
+])
 </script>

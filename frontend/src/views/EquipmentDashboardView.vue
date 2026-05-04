@@ -1,36 +1,36 @@
 <template>
   <div class="eq-page">
     <a-page-header
-      title="設備總覽"
-      sub-title="即時呈現所有設備的當前狀態與占用訂單"
+      :title="t('equipmentDashboard.title')"
+      :sub-title="t('equipmentDashboard.subtitle')"
       :back-icon="false"
     >
       <template #extra>
         <a-radio-group v-model:value="filter" button-style="solid">
-          <a-radio-button value="all">全部</a-radio-button>
-          <a-radio-button value="available">可用</a-radio-button>
-          <a-radio-button value="occupied">占用中</a-radio-button>
-          <a-radio-button value="maintenance">維修</a-radio-button>
+          <a-radio-button value="all">{{ t('equipmentDashboard.filterAll') }}</a-radio-button>
+          <a-radio-button value="available">{{ t('equipmentStatus.available') }}</a-radio-button>
+          <a-radio-button value="occupied">{{ t('equipmentStatus.occupied') }}</a-radio-button>
+          <a-radio-button value="maintenance">{{ t('equipmentStatus.maintenance') }}</a-radio-button>
         </a-radio-group>
         <a-button @click="load" :loading="loading">
           <template #icon><ReloadOutlined /></template>
-          重新整理
+          {{ t('common.refresh') }}
         </a-button>
       </template>
     </a-page-header>
 
     <div class="legend">
       <a-tag color="success">
-        <CheckCircleOutlined />&nbsp;可用 ({{ countByStatus.available || 0 }})
+        <CheckCircleOutlined />&nbsp;{{ t('equipmentDashboard.legendAvailable', { n: countByStatus.available || 0 }) }}
       </a-tag>
       <a-tag color="processing">
-        <SyncOutlined :spin="true" />&nbsp;占用中 ({{ countByStatus.occupied || 0 }})
+        <SyncOutlined :spin="true" />&nbsp;{{ t('equipmentDashboard.legendOccupied', { n: countByStatus.occupied || 0 }) }}
       </a-tag>
       <a-tag color="error">
-        <WarningOutlined />&nbsp;維修 ({{ countByStatus.maintenance || 0 }})
+        <WarningOutlined />&nbsp;{{ t('equipmentDashboard.legendMaintenance', { n: countByStatus.maintenance || 0 }) }}
       </a-tag>
       <a-tag color="default">
-        <PauseCircleOutlined />&nbsp;停用 ({{ countByStatus.inactive || 0 }})
+        <PauseCircleOutlined />&nbsp;{{ t('equipmentDashboard.legendInactive', { n: countByStatus.inactive || 0 }) }}
       </a-tag>
     </div>
 
@@ -77,27 +77,27 @@
 
     <a-empty
       v-if="!loading && !filteredMatrix.length"
-      description="沒有符合篩選的設備"
+      :description="t('equipmentDashboard.noResults')"
       style="margin: 60px 0"
     />
 
     <a-modal
       v-model:open="modalOpen"
-      :title="`${selectedEq?.code || ''} — 當前訂單`"
+      :title="`${selectedEq?.code || ''} — ${t('equipmentDashboard.activeOrder')}`"
       :footer="null"
       width="480"
     >
       <template v-if="selectedEq?.active_order">
         <a-descriptions :column="1" bordered size="small">
-          <a-descriptions-item label="訂單編號">
+          <a-descriptions-item :label="t('orders.orderNo')">
             <a-typography-text strong>
               {{ selectedEq.active_order.order_no }}
             </a-typography-text>
           </a-descriptions-item>
-          <a-descriptions-item label="開始時間">
+          <a-descriptions-item :label="t('review.startTime')">
             {{ formatDate(selectedEq.active_order.started_at) }}
           </a-descriptions-item>
-          <a-descriptions-item label="結束時間">
+          <a-descriptions-item :label="t('review.endTime')">
             {{ formatDate(selectedEq.active_order.ended_at) }}
           </a-descriptions-item>
         </a-descriptions>
@@ -108,7 +108,10 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
+
+const { t } = useI18n()
 import {
   CheckCircleOutlined,
   PauseCircleOutlined,
@@ -162,10 +165,7 @@ function showOrder(eq) {
 }
 
 function statusLabel(s) {
-  return {
-    available: '可用', occupied: '占用中',
-    maintenance: '維修', inactive: '停用', pending: '待處理',
-  }[s] || s
+  return t(`equipmentStatus.${s}`, s)
 }
 function statusColor(s) {
   return {
@@ -204,13 +204,14 @@ function formatDate(value) {
   gap: 10px;
   padding: 8px 12px;
   border-radius: 6px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
+  background: var(--c-row-bg);
+  border: 1px solid var(--c-border-light);
+  color: var(--c-text);
   transition: all 0.15s ease;
 }
 .eq-row:hover {
-  background: #f0f5ff;
-  border-color: #91caff;
+  background: var(--c-row-hover);
+  border-color: var(--c-row-hover-border);
   transform: translateX(2px);
 }
 .eq-dot {
@@ -237,10 +238,11 @@ function formatDate(value) {
 .eq-code {
   font-weight: 600;
   font-size: 13px;
+  color: var(--c-text);
 }
 .eq-dept {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--c-text-muted);
 }
 .order-tag {
   margin-right: 0 !important;

@@ -168,9 +168,9 @@ function getBarStyle(b) {
   padding: 8px; text-align: center; font-size: 0.7rem; font-weight: 700; color: var(--c-text-muted);
 }
 .sticker-col { position: sticky; left: 0; z-index: 10; background: var(--c-bg-card); width: 120px; border-right: 2px solid var(--c-border); box-shadow: 4px 0 10px rgba(0,0,0,0.08); }
-.type-row { padding: 8px 16px; border-bottom: 2px solid var(--c-border); position: sticky; left: 0; z-index: 5; background: #f1f5f9; color: #334155; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.eq-row-content { display: flex; position: relative; height: 72px; border-bottom: 1px solid var(--c-border-light); background: rgba(255,255,255,0.4); }
-.eq-label { display: flex; align-items: center; padding: 0 16px; font-size: 0.8rem; font-weight: 800; color: #0f172a; border-right: 1px solid var(--c-border-light); }
+.type-row { padding: 8px 16px; border-bottom: 2px solid var(--c-border); position: sticky; left: 0; z-index: 5; background: var(--c-section-strip); color: var(--c-section-strip-text); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.eq-row-content { display: flex; position: relative; height: 72px; border-bottom: 1px solid var(--c-border-light); background: var(--c-bg-card); }
+.eq-label { display: flex; align-items: center; padding: 0 16px; font-size: 0.8rem; font-weight: 800; color: var(--c-text); border-right: 1px solid var(--c-border-light); }
 .time-cell { width: 60px; min-width: 60px; border-right: 1px solid var(--c-border-light); }
 
 .booking-bar {

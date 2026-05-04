@@ -326,6 +326,8 @@ function goAdmin() {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
+  background: var(--c-bg-card);
+  border-bottom: 1px solid var(--c-border);
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.06);
   height: 64px;
 }

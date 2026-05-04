@@ -9,7 +9,7 @@
     >
       <div class="admin-brand">
         <ThunderboltOutlined class="brand-icon" />
-        <span v-if="!collapsed" class="brand-text">LIMS Admin</span>
+        <span v-if="!collapsed" class="brand-text">{{ t('admin.consoleBrand') }}</span>
       </div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
@@ -26,7 +26,7 @@
           <a-breadcrumb>
             <a-breadcrumb-item>
               <HomeOutlined />
-              <span>&nbsp;LIMS</span>
+              <span>&nbsp;{{ t('admin.breadcrumbHome') }}</span>
             </a-breadcrumb-item>
             <a-breadcrumb-item>{{ currentLabel }}</a-breadcrumb-item>
           </a-breadcrumb>
@@ -37,11 +37,11 @@
           </a-tag>
           <a-button type="link" @click="goHome">
             <template #icon><RollbackOutlined /></template>
-            返回主系統
+            {{ t('admin.backToMain') }}
           </a-button>
           <a-button type="link" danger @click="onLogout">
             <template #icon><LogoutOutlined /></template>
-            登出
+            {{ t('auth.logout') }}
           </a-button>
         </div>
       </a-layout-header>
@@ -55,7 +55,7 @@
       </a-layout-content>
 
       <a-layout-footer class="admin-footer">
-        LIMS Admin Console &nbsp;·&nbsp; Semiconductor FAB Relay Management
+        {{ t('admin.consoleBrand') }} &nbsp;·&nbsp; {{ t('common.appSubtitle') }}
       </a-layout-footer>
     </a-layout>
   </a-layout>
@@ -64,6 +64,7 @@
 <script setup>
 import { computed, h, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   ApartmentOutlined,
   AppstoreOutlined,
@@ -89,45 +90,46 @@ import { useAuthStore } from '../../stores/auth'
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const collapsed = ref(false)
 
-const menuConfig = [
-  { key: 'dashboard', label: '系統儀表板', icon: DashboardOutlined, path: '/admin/dashboard' },
-  { key: 'logs', label: '活動日誌', icon: FileSearchOutlined, path: '/admin/logs' },
+const menuConfig = computed(() => [
+  { key: 'dashboard', label: t('admin.nav.dashboard'), icon: DashboardOutlined, path: '/admin/dashboard' },
+  { key: 'logs', label: t('admin.nav.logs'), icon: FileSearchOutlined, path: '/admin/logs' },
   { type: 'divider' },
-  { key: 'fabs', label: 'FAB 工廠', icon: BankOutlined, path: '/admin/fabs' },
-  { key: 'departments', label: '部門', icon: ApartmentOutlined, path: '/admin/departments' },
-  { key: 'users', label: '使用者', icon: TeamOutlined, path: '/admin/users' },
+  { key: 'fabs', label: t('admin.nav.fabs'), icon: BankOutlined, path: '/admin/fabs' },
+  { key: 'departments', label: t('admin.nav.departments'), icon: ApartmentOutlined, path: '/admin/departments' },
+  { key: 'users', label: t('admin.nav.users'), icon: TeamOutlined, path: '/admin/users' },
   { type: 'divider' },
-  { key: 'experiments', label: '實驗類型', icon: ExperimentOutlined, path: '/admin/experiments' },
-  { key: 'equipment-types', label: '設備類型', icon: AppstoreOutlined, path: '/admin/equipment-types' },
-  { key: 'equipment', label: '設備', icon: ToolOutlined, path: '/admin/equipment' },
+  { key: 'experiments', label: t('admin.nav.experiments'), icon: ExperimentOutlined, path: '/admin/experiments' },
+  { key: 'equipment-types', label: t('admin.nav.equipmentTypes'), icon: AppstoreOutlined, path: '/admin/equipment-types' },
+  { key: 'equipment', label: t('admin.nav.equipment'), icon: ToolOutlined, path: '/admin/equipment' },
   {
     key: 'experiment-requirements',
-    label: '實驗設備需求',
+    label: t('admin.nav.experimentRequirements'),
     icon: ClusterOutlined,
     path: '/admin/experiment-requirements',
   },
   { type: 'divider' },
-  { key: 'orders', label: '訂單', icon: ProfileOutlined, path: '/admin/orders' },
-  { key: 'order-stages', label: '訂單階段', icon: NodeIndexOutlined, path: '/admin/order-stages' },
-  { key: 'bookings', label: '設備預約', icon: CalendarOutlined, path: '/admin/bookings' },
-]
+  { key: 'orders', label: t('admin.nav.orders'), icon: ProfileOutlined, path: '/admin/orders' },
+  { key: 'order-stages', label: t('admin.nav.orderStages'), icon: NodeIndexOutlined, path: '/admin/order-stages' },
+  { key: 'bookings', label: t('admin.nav.bookings'), icon: CalendarOutlined, path: '/admin/bookings' },
+])
 
 const menuItems = computed(() =>
-  menuConfig.map((item, idx) =>
+  menuConfig.value.map((item, idx) =>
     item.type === 'divider'
       ? { type: 'divider', key: `d-${idx}` }
       : { key: item.key, label: item.label, icon: () => h(item.icon) },
   ),
 )
 
-const pathByKey = Object.fromEntries(
-  menuConfig.filter((m) => m.key).map((m) => [m.key, m.path]),
+const pathByKey = computed(() =>
+  Object.fromEntries(menuConfig.value.filter((m) => m.key).map((m) => [m.key, m.path])),
 )
-const labelByKey = Object.fromEntries(
-  menuConfig.filter((m) => m.key).map((m) => [m.key, m.label]),
+const labelByKey = computed(() =>
+  Object.fromEntries(menuConfig.value.filter((m) => m.key).map((m) => [m.key, m.label])),
 )
 
 const selectedKeys = ref([deriveKey(route.path)])
@@ -141,13 +143,15 @@ watch(
 
 function deriveKey(path) {
   const segment = path.split('/')[2] || 'dashboard'
-  return segment in pathByKey ? segment : 'dashboard'
+  return segment in pathByKey.value ? segment : 'dashboard'
 }
 
-const currentLabel = computed(() => labelByKey[selectedKeys.value[0]] || '管理後台')
+const currentLabel = computed(
+  () => labelByKey.value[selectedKeys.value[0]] || t('admin.consoleSubtitle'),
+)
 
 function onMenuClick({ key }) {
-  router.push(pathByKey[key])
+  router.push(pathByKey.value[key])
 }
 
 function goHome() {
@@ -195,7 +199,8 @@ function onLogout() {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: #fff;
+  background: var(--c-bg-card);
+  border-bottom: 1px solid var(--c-border);
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 
@@ -208,7 +213,8 @@ function onLogout() {
 .admin-content {
   margin: 24px;
   padding: 24px;
-  background: #fff;
+  background: var(--c-bg-card);
+  color: var(--c-text);
   min-height: calc(100vh - 64px - 70px - 48px);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -216,7 +222,7 @@ function onLogout() {
 
 .admin-footer {
   text-align: center;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--c-text-muted);
   background: transparent;
 }
 

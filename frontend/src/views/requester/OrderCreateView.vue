@@ -1,19 +1,23 @@
 <template>
   <div class="create-page">
-    <a-page-header title="送樣申請" sub-title="選擇實驗類型,Lab Manager 將安排設備與時間" :back-icon="false" />
+    <a-page-header
+      :title="t('createOrder.title')"
+      :sub-title="t('createOrder.subtitle')"
+      :back-icon="false"
+    />
 
     <a-row :gutter="[16, 16]">
       <a-col :xs="24" :lg="14">
-        <a-card :bordered="false" title="申請表單">
+        <a-card :bordered="false" :title="t('createOrder.formTitle')">
           <a-result
             v-if="success"
             status="success"
-            :title="`訂單 ${createdOrderNo} 已成功送出!`"
-            sub-title="狀態為「等待中」,Lab Manager 將進行排程審核"
+            :title="t('createOrder.successTitle', { orderNo: createdOrderNo })"
+            :sub-title="t('createOrder.successSub')"
           >
             <template #extra>
-              <a-button type="primary" @click="resetForm">繼續送樣</a-button>
-              <a-button @click="$router.push('/orders')">查看訂單清單</a-button>
+              <a-button type="primary" @click="resetForm">{{ t('createOrder.continueSubmit') }}</a-button>
+              <a-button @click="$router.push('/orders')">{{ t('createOrder.seeOrderList') }}</a-button>
             </template>
           </a-result>
 
@@ -24,13 +28,13 @@
             @finish="handleSubmit"
           >
             <a-form-item
-              label="實驗類型"
+              :label="t('createOrder.experimentLabel')"
               name="experiment"
-              :rules="[{ required: true, message: '請選擇實驗類型' }]"
+              :rules="[{ required: true, message: t('createOrder.requireExperiment') }]"
             >
               <a-select
                 v-model:value="form.experiment"
-                placeholder="請選擇要進行的實驗"
+                :placeholder="t('createOrder.experimentPlaceholder')"
                 show-search
                 option-filter-prop="label"
                 size="large"
@@ -39,33 +43,33 @@
               />
             </a-form-item>
 
-            <a-form-item label="Lot ID" name="lot_id">
+            <a-form-item :label="t('createOrder.lotIdLabel')" name="lot_id">
               <a-input
                 v-model:value="form.lot_id"
-                placeholder="例如: LOT-2026-A001"
+                :placeholder="t('createOrder.lotIdPlaceholder')"
                 size="large"
               />
             </a-form-item>
 
             <a-form-item name="is_urgent">
               <a-checkbox v-model:checked="form.is_urgent">
-                <a-tag color="red" style="margin-right: 6px">緊急</a-tag>
-                標記為緊急訂單(優先排程)
+                <a-tag color="red" style="margin-right: 6px">{{ t('orders.urgent') }}</a-tag>
+                {{ t('createOrder.urgentCheckbox') }}
               </a-checkbox>
             </a-form-item>
 
-            <a-form-item label="備註" name="remark">
+            <a-form-item :label="t('orders.remark')" name="remark">
               <a-textarea
                 v-model:value="form.remark"
                 :rows="3"
-                placeholder="任何需要 Lab Manager 知道的細節..."
+                :placeholder="t('createOrder.remarkPlaceholder')"
               />
             </a-form-item>
 
             <a-alert
               type="info"
               show-icon
-              message="排程時間將由 Lab Manager 在審核階段決定"
+              :message="t('createOrder.scheduleNote')"
               style="margin-bottom: 16px"
             />
 
@@ -84,7 +88,7 @@
               size="large"
             >
               <template #icon><SendOutlined /></template>
-              送出申請
+              {{ t('createOrder.submitButton') }}
             </a-button>
           </a-form>
         </a-card>
@@ -94,13 +98,13 @@
         <a-card
           v-if="!form.experiment"
           :bordered="false"
-          title="設備需求預覽"
+          :title="t('createOrder.requirementPreview')"
         >
-          <a-empty description="請先選擇實驗類型,系統將顯示所需設備與容量" />
+          <a-empty :description="t('createOrder.requirementHint')" />
         </a-card>
 
         <template v-else>
-          <a-card :bordered="false" title="所需設備清單" class="side-card">
+          <a-card :bordered="false" :title="t('createOrder.requiredEquipments')" class="side-card">
             <a-list
               :data-source="selectedExp?.required_equipments || []"
               size="small"
@@ -110,12 +114,12 @@
                   <a-list-item-meta>
                     <template #title>
                       <a-space>
-                        <a-tag color="blue">Step {{ item.step_order }}</a-tag>
+                        <a-tag color="blue">{{ t('review.step') }} {{ item.step_order }}</a-tag>
                         <span class="font-bold">{{ item.equipment_type_name }}</span>
                       </a-space>
                     </template>
                     <template #description>
-                      <span class="muted">{{ item.department_name }} · 數量 {{ item.quantity }}</span>
+                      <span class="muted">{{ item.department_name }} · {{ t('createOrder.quantity') }} {{ item.quantity }}</span>
                     </template>
                   </a-list-item-meta>
                 </a-list-item>
@@ -123,7 +127,7 @@
               <template #loadMore>
                 <a-empty
                   v-if="!(selectedExp?.required_equipments || []).length"
-                  description="此實驗未定義設備需求"
+                  :description="t('createOrder.noRequirement')"
                 />
               </template>
             </a-list>
@@ -132,7 +136,7 @@
           <a-card
             v-if="capacity"
             :bordered="false"
-            title="設備容量檢查"
+            :title="t('createOrder.capacityCheckTitle')"
             class="side-card"
             style="margin-top: 16px"
           >
@@ -140,15 +144,15 @@
               v-if="capacity.has_shortage"
               type="warning"
               show-icon
-              message="設備資源不足"
-              description="預計排程可能延後,請考慮非緊急訂單"
+              :message="t('createOrder.shortageTitle')"
+              :description="t('createOrder.shortageDesc')"
               style="margin-bottom: 12px"
             />
             <a-alert
               v-else
               type="success"
               show-icon
-              message="設備資源充足,可立即排程"
+              :message="t('createOrder.sufficient')"
               style="margin-bottom: 12px"
             />
             <a-list
@@ -173,10 +177,13 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { SendOutlined } from '@ant-design/icons-vue'
 import { fetchCapacityCheck, fetchExperiments } from '../../api/equipments'
 import { createOrder } from '../../api/orders'
+
+const { t } = useI18n()
 
 const experiments = ref([])
 const capacity = ref(null)
@@ -205,7 +212,7 @@ onMounted(async () => {
     const { data } = await fetchExperiments()
     experiments.value = data.results || data
   } catch {
-    message.error('載入實驗清單失敗')
+    message.error(t('createOrder.loadExpFailed'))
   }
 })
 
@@ -216,7 +223,7 @@ async function onExperimentChange() {
     const { data } = await fetchCapacityCheck(form.experiment)
     capacity.value = data
   } catch {
-    /* capacity check 是輔助資訊,失敗不阻止建單 */
+    /* capacity check is informational; failure should not block submission */
   }
 }
 
@@ -227,7 +234,7 @@ async function handleSubmit() {
     const { data } = await createOrder(form)
     createdOrderNo.value = data.order_no
     success.value = true
-    message.success(`訂單 ${data.order_no} 建立成功`)
+    message.success(t('createOrder.successTitle', { orderNo: data.order_no }))
   } catch (e) {
     const data = e.response?.data
     if (typeof data === 'string') error.value = data
@@ -235,7 +242,7 @@ async function handleSubmit() {
     else if (data && typeof data === 'object') {
       const k = Object.keys(data)[0]
       error.value = `${k}: ${Array.isArray(data[k]) ? data[k].join(', ') : data[k]}`
-    } else error.value = '送出失敗'
+    } else error.value = t('createOrder.submitFailed')
   } finally {
     loading.value = false
   }
@@ -257,7 +264,7 @@ function resetForm() {
   padding: 0;
 }
 .muted {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--c-text-muted);
   font-size: 12px;
 }
 .font-bold {
