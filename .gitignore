@@ -146,3 +146,14 @@ yarn-error.log*
 frontend/dist/
 frontend/node_modules/
 frontend/.env
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/
+
+# Vitest coverage
+frontend/coverage/
+backend/htmlcov/
+backend/.coverage
