@@ -107,3 +107,21 @@ body {
 :root[data-theme='dark'] .ant-table-placeholder .ant-empty-description {
   color: var(--c-text-muted);
 }
+
+/* Browser autofill bleed-through.
+ *
+ * Chromium / Safari paint a hardcoded light-yellow background on inputs that
+ * the password manager has filled in (or saved). It looks bright-white in
+ * dark mode and clashes with the antd Input chrome. The trick to override it
+ * is an inset box-shadow plus -webkit-text-fill-color (regular `color`
+ * doesn't apply to autofilled values), with a near-infinite transition delay
+ * so the original yellow never fades back in. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--c-bg-card) inset !important;
+  -webkit-text-fill-color: var(--c-text) !important;
+  caret-color: var(--c-text);
+  transition: background-color 600000s ease-in-out 0s;
+}
