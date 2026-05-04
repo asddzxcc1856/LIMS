@@ -1,0 +1,146 @@
+name: CD (deploy to GCP)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Status: DRAFT — kept disabled until the target GCP project is provisioned.
+#
+# How to enable:
+#   1. Provision the target Cloud Run / GCE host and the Artifact Registry repo
+#      (region: asia-east1 by default).
+#   2. Create a GitHub OIDC service account in GCP and bind:
+#        - roles/run.admin
+#        - roles/artifactregistry.writer
+#        - roles/iam.serviceAccountUser
+#   3. Add these repository secrets:
+#        - GCP_WORKLOAD_IDENTITY_PROVIDER
+#        - GCP_SERVICE_ACCOUNT
+#        - GCP_PROJECT_ID
+#        - DJANGO_SECRET_KEY
+#        - LIMS_ADMIN_PASSWORD
+#   4. Change the workflow trigger below from `workflow_dispatch` to:
+#        on:
+#          push:
+#            branches: [main]
+#          workflow_dispatch:
+#   5. Remove the `if: ${{ false }}` guard on the `deploy` job.
+#
+# Until those steps complete, the workflow can still be inspected on GitHub
+# (Actions tab → CD (deploy to GCP)) but the deploy job is unreachable.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY to confirm'
+        required: true
+        default: 'no'
+
+env:
+  GCP_REGION: asia-east1
+  IMAGE_REPO: lims
+  BACKEND_IMAGE: lims-backend
+  FRONTEND_IMAGE: lims-frontend
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Build container images and push to Artifact Registry.
+  # Currently disabled with `if: false` so the job is parsed but never runs.
+  # ─────────────────────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build images
+    if: ${{ false }}            # Remove this line once GCP is ready.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write             # Workload Identity Federation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject unconfirmed manual runs
+        if: ${{ github.event.inputs.confirm != 'DEPLOY' }}
+        run: |
+          echo "::error::Manual run requires the 'confirm' input set to DEPLOY"
+          exit 1
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build backend image
+        run: |
+          docker build \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.BACKEND_IMAGE }}:latest \
+            ./backend
+
+      - name: Build frontend image
+        run: |
+          docker build \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.FRONTEND_IMAGE }}:latest \
+            ./frontend
+
+      - name: Push images
+        run: |
+          docker push --all-tags ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.BACKEND_IMAGE }}
+          docker push --all-tags ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.FRONTEND_IMAGE }}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Roll out to Cloud Run. Disabled until target environment is ready.
+  # ─────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Cloud Run
+    needs: build-and-push
+    if: ${{ false }}            # Remove this line once GCP is ready.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy backend (Cloud Run)
+        run: |
+          gcloud run deploy lims-backend \
+            --image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8000 \
+            --set-env-vars=DJANGO_PRODUCTION=True,DJANGO_DEBUG=False \
+            --set-secrets=DJANGO_SECRET_KEY=django-secret-key:latest,LIMS_ADMIN_PASSWORD=lims-admin-password:latest
+
+      - name: Deploy frontend (Cloud Run)
+        run: |
+          gcloud run deploy lims-frontend \
+            --image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=80
+
+      - name: Run post-deploy smoke check
+        run: |
+          BACKEND_URL=$(gcloud run services describe lims-backend --region=${{ env.GCP_REGION }} --format='value(status.url)')
+          curl -fsS -o /dev/null "$BACKEND_URL/api/users/login/" -X POST \
+            -H "Content-Type: application/json" -d '{}' || \
+            { echo "::error::Smoke check failed: backend not responding"; exit 1; }
+          echo "::notice::Deployment OK at $BACKEND_URL"

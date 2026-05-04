@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs of the same branch when a new push arrives.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Backend: pytest (76 unit + integration tests, AAA + 5 test-double styles)
+  # ─────────────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_DEBUG: 'True'
+        run: pytest --tb=short
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/htmlcov/
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Frontend unit / component tests (vitest)
+  # ─────────────────────────────────────────────────────────────────────────
+  frontend-unit:
+    name: Frontend unit (vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # End-to-end tests (Playwright). Boots Django + Vite together.
+  # ─────────────────────────────────────────────────────────────────────────
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend-unit]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Python / Django backend
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Migrate + load seed data + provision admin
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_DEBUG: 'True'
+        run: |
+          python manage.py migrate --noinput
+          python manage.py loaddata seed_data.json || true
+          python manage.py ensure_admin
+      - name: Start Django backend (background)
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_DEBUG: 'True'
+        run: |
+          nohup python manage.py runserver 127.0.0.1:8000 --noreload > backend.log 2>&1 &
+          # Wait for the API to come up (max ~30s)
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8000/api/users/login/ -X POST \
+                -H "Content-Type: application/json" -d '{}'; then
+              echo "Backend up after ${i}s"; break
+            fi
+            sleep 1
+          done
+
+      # Node / Playwright
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright suite
+        working-directory: frontend
+        env:
+          E2E_ADMIN_PASSWORD: 'Admin@LIMS_2026!Sup'
+          CI: '1'
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload Django log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: django-server-log
+          path: backend/backend.log
+          if-no-files-found: ignore
