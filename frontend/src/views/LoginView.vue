@@ -6,7 +6,7 @@
     <a-card class="auth-card" :bordered="false">
       <div class="auth-brand">
         <ExperimentOutlined class="brand-icon" />
-        <h1 class="brand-title">{{ t('common.appName') }}</h1>
+        <h1 class="brand-title">{{ t('common.appFullName') }}</h1>
         <p class="brand-subtitle">{{ t('common.appSubtitle') }}</p>
       </div>
 
@@ -158,9 +158,10 @@ async function handleLogin() {
   margin-bottom: 8px;
 }
 .brand-title {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
+  line-height: 1.3;
   background: linear-gradient(135deg, #1890ff, #722ed1);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

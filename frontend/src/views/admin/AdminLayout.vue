@@ -55,7 +55,7 @@
       </a-layout-content>
 
       <a-layout-footer class="admin-footer">
-        {{ t('admin.consoleBrand') }} &nbsp;·&nbsp; {{ t('common.appSubtitle') }}
+        {{ t('admin.consoleBrand') }} &nbsp;·&nbsp; {{ t('common.appFullName') }}
       </a-layout-footer>
     </a-layout>
   </a-layout>

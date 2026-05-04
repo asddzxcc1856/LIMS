@@ -86,7 +86,7 @@
         </a-layout-content>
 
         <a-layout-footer class="app-footer">
-          {{ t('common.appName') }} · {{ t('common.appSubtitle') }}
+          {{ t('common.appFullName') }} · {{ t('common.appSubtitle') }}
         </a-layout-footer>
       </a-layout>
     </a-layout>

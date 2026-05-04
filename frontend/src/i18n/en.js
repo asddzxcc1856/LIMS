@@ -1,6 +1,7 @@
 export default {
   common: {
     appName: 'LIMS',
+    appFullName: 'Laboratory Information Management System (LIMS)',
     appSubtitle: 'Semiconductor FAB Relay Management',
     refresh: 'Refresh',
     save: 'Save',

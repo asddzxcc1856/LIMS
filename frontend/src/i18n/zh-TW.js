@@ -1,6 +1,7 @@
 export default {
   common: {
     appName: 'LIMS',
+    appFullName: '實驗室管理系統 (LIMS)',
     appSubtitle: '半導體 FAB 接力管理系統',
     refresh: '重新整理',
     save: '儲存',
