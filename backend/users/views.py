@@ -1,8 +1,10 @@
 """
 users/views.py
-API views for user registration and profile.
+API views for profile and lookup. New accounts are created via the admin
+console (/api/admin/users/ + /api/admin/users/bulk-create/) — there is no
+public registration endpoint.
 """
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
@@ -10,19 +12,11 @@ from .models import FAB, Department
 from .serializers import (
     FABSerializer,
     DepartmentSerializer,
-    RegisterSerializer,
     UserProfileSerializer,
     UserSerializer,
 )
 
 User = get_user_model()
-
-
-class RegisterView(generics.CreateAPIView):
-    """POST /api/users/register/ – public registration."""
-    queryset = User.objects.all()
-    serializer_class = RegisterSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class ProfileView(APIView):

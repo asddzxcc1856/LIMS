@@ -66,13 +66,9 @@
         </a-button>
       </a-form>
 
-      <a-divider plain style="margin: 24px 0 16px; color: rgba(0, 0, 0, 0.35)">
-        {{ t('auth.noAccount') }}
+      <a-divider plain class="auth-foot-note">
+        {{ t('auth.contactAdmin') }}
       </a-divider>
-
-      <router-link to="/register">
-        <a-button block size="large">{{ t('auth.register') }}</a-button>
-      </router-link>
     </a-card>
   </div>
 </template>
@@ -177,5 +173,11 @@ async function handleLogin() {
   color: var(--c-text-muted);
   letter-spacing: 0.6px;
   text-transform: uppercase;
+}
+
+.auth-foot-note {
+  margin: 24px 0 0;
+  color: var(--c-text-muted);
+  font-size: 12px;
 }
 </style>

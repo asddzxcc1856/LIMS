@@ -188,7 +188,7 @@ const antdTheme = computed(() => ({
 }))
 
 /** Routes that render their own layout. */
-const STANDALONE_PREFIXES = ['/login', '/register', '/admin']
+const STANDALONE_PREFIXES = ['/login', '/admin']
 
 const showAppShell = computed(() => {
   if (!auth.isLoggedIn) return false

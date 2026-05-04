@@ -21,7 +21,13 @@ const resource = (path) => ({
 
 export const adminFabs = resource('fabs')
 export const adminDepartments = resource('departments')
-export const adminUsers = resource('users')
+export const adminUsers = {
+  ...resource('users'),
+  /** Provision N requesters / lab members / lab managers in one shot. */
+  bulkCreate: (payload) => client.post('/admin/users/bulk-create/', payload),
+  /** Delete N user accounts; safety rails on backend skip self/last superuser. */
+  bulkDelete: (ids) => client.post('/admin/users/bulk-delete/', { ids }),
+}
 export const adminExperiments = resource('experiments')
 export const adminEquipmentTypes = resource('equipment-types')
 export const adminEquipment = resource('equipment')

@@ -7,6 +7,7 @@
       :back-icon="false"
     >
       <template #extra>
+        <slot name="extra-actions" :selected-row-keys="selectedRowKeys" :reload="loadData" />
         <a-input-search
           v-model:value="searchText"
           :placeholder="searchPlaceholder || t('crud.searchPlaceholder')"
@@ -31,6 +32,7 @@
       :row-key="rowKey"
       :loading="loading"
       :pagination="pagination"
+      :row-selection="selectable ? rowSelectionConfig : undefined"
       bordered
       size="middle"
       @change="onTableChange"
@@ -154,7 +156,12 @@ const props = defineProps({
    * across many fields on the page).
    */
   presetOptions: { type: Object, default: () => ({}) },
+  /** When true, the table renders a leading checkbox column and emits
+   *  `update:selectedRowKeys` so the parent can drive bulk operations. */
+  selectable: { type: Boolean, default: false },
 })
+
+const emit = defineEmits(['update:selectedRowKeys'])
 
 const rows = ref([])
 const loading = ref(false)
@@ -172,6 +179,20 @@ const pagination = reactive({
 
 const modalOpen = ref(false)
 const editingId = ref(null)
+const selectedRowKeys = ref([])
+
+const rowSelectionConfig = computed(() => ({
+  selectedRowKeys: selectedRowKeys.value,
+  onChange: (keys) => {
+    selectedRowKeys.value = keys
+    emit('update:selectedRowKeys', keys)
+  },
+}))
+
+function clearSelection() {
+  selectedRowKeys.value = []
+  emit('update:selectedRowKeys', [])
+}
 const formState = reactive({})
 const formRef = ref(null)
 const submitting = ref(false)
@@ -447,7 +468,7 @@ watch(
   },
 )
 
-defineExpose({ reload: loadData })
+defineExpose({ reload: loadData, clearSelection })
 </script>
 
 <style scoped>

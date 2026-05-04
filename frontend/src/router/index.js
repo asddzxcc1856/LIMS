@@ -5,7 +5,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 import LoginView from '../views/LoginView.vue'
-import RegisterView from '../views/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import OrderCreateView from '../views/requester/OrderCreateView.vue'
 import OrderListView from '../views/requester/OrderListView.vue'
@@ -29,7 +28,6 @@ import AdminBookingsView from '../views/admin/BookingsView.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { guest: true } },
-  { path: '/register', name: 'Register', component: RegisterView, meta: { guest: true } },
   { path: '/', name: 'Dashboard', component: DashboardView },
   // Requester
   { path: '/orders', name: 'MyOrders', component: OrderListView },
