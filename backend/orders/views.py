@@ -63,8 +63,14 @@ class OrderListView(generics.ListAPIView):
 
         if user.role == 'superuser':
             return qs
-        if user.role == 'lab_manager':
-            return qs.filter(department=user.department)
+        if user.role == 'lab_manager' and user.department_id:
+            # See OrderStageListView for why this matches by (fab, name) and
+            # not the raw dept_id — rescues duplicate-Department rows.
+            dept = user.department
+            return qs.filter(
+                department__fab_id=dept.fab_id,
+                department__name=dept.name,
+            )
         if user.role == 'lab_member':
             return qs.filter(stages__assignee=user).distinct()
         # regular_employee
@@ -117,8 +123,14 @@ class OrderDetailView(generics.RetrieveAPIView):
         )
         if user.role == 'superuser':
             return qs
-        if user.role == 'lab_manager':
-            return qs.filter(department=user.department)
+        if user.role == 'lab_manager' and user.department_id:
+            # See OrderStageListView for why this matches by (fab, name)
+            # rather than the raw dept_id.
+            dept = user.department
+            return qs.filter(
+                department__fab_id=dept.fab_id,
+                department__name=dept.name,
+            )
         if user.role == 'lab_member':
             return qs.filter(stages__assignee=user).distinct()
         return qs.filter(user=user)
@@ -228,8 +240,19 @@ class OrderStageListView(generics.ListAPIView):
 
         if user.role == 'superuser':
             return qs
-        if user.role == 'lab_manager' and user.department:
-            return qs.filter(department=user.department)
+        if user.role == 'lab_manager' and user.department_id:
+            # Match by (fab, dept name) rather than dept primary-key alone.
+            # Equivalent in clean data, but rescues the case where a Department
+            # row was provisioned twice (once by seed_data.json, once by the
+            # demo migration) leaving two rows with the same fab+name but
+            # different UUIDs. With pure dept_id matching the manager would
+            # silently see zero stages whenever a stage had been bound to the
+            # *other* row of the duplicate pair.
+            dept = user.department
+            return qs.filter(
+                department__fab_id=dept.fab_id,
+                department__name=dept.name,
+            )
         if user.role == 'lab_member':
             return qs.filter(assignee=user)
         return qs.filter(order__user=user)

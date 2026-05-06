@@ -363,38 +363,58 @@ onMounted(reloadAll)
 async function reloadAll() {
   loading.value = true
   try {
-    await Promise.all([loadStages(), loadMembers(), loadTimelineData()])
+    // Promise.allSettled (not .all) so a 403/500 from any single endpoint
+    // — most commonly /equipments/status-matrix/ when a manager has no
+    // matching dept — doesn't blank out the stages table that already
+    // loaded successfully. Each loader does its own try/catch internally.
+    await Promise.allSettled([loadStages(), loadMembers(), loadTimelineData()])
   } finally {
     loading.value = false
   }
 }
 
 async function loadStages() {
-  const { data } = await fetchStages()
-  stages.value = data.results || data || []
+  try {
+    const { data } = await fetchStages()
+    stages.value = data.results || data || []
+  } catch (e) {
+    // Surface the failure clearly instead of leaving the table silently
+    // empty — most commonly this means token expired or backend 500.
+    message.error(e.response?.data?.detail || t('orders.loadFailed'))
+    stages.value = []
+  }
 }
 
 async function loadMembers() {
-  const { data } = await client.get('/users/')
-  members.value = (data.results || data || []).filter((u) =>
-    ['lab_member', 'lab_manager'].includes(u.role),
-  )
+  try {
+    const { data } = await client.get('/users/')
+    members.value = (data.results || data || []).filter((u) =>
+      ['lab_member', 'lab_manager'].includes(u.role),
+    )
+  } catch {
+    members.value = []   // fall back to empty assignee dropdown
+  }
 }
 
 async function loadTimelineData() {
-  const [resEq, resBk, resProf] = await Promise.all([
-    client.get('/equipments/status-matrix/'),
-    fetchBookings(),
-    client.get('/users/profile/'),
-  ])
-  const myDept = resProf.data.department_name
-  groupedEquipments.value = resEq.data
-    .map((type) => ({
-      ...type,
-      equipments: type.equipments.filter((eq) => eq.department_name === myDept),
-    }))
-    .filter((type) => type.equipments.length > 0)
-  allBookings.value = resBk.data.results || resBk.data || []
+  try {
+    const [resEq, resBk, resProf] = await Promise.all([
+      client.get('/equipments/status-matrix/'),
+      fetchBookings(),
+      client.get('/users/profile/'),
+    ])
+    const myDept = resProf.data.department_name
+    groupedEquipments.value = resEq.data
+      .map((type) => ({
+        ...type,
+        equipments: type.equipments.filter((eq) => eq.department_name === myDept),
+      }))
+      .filter((type) => type.equipments.length > 0)
+    allBookings.value = resBk.data.results || resBk.data || []
+  } catch {
+    groupedEquipments.value = []
+    allBookings.value = []
+  }
 }
 
 function openApprove(stage) {
