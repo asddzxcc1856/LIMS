@@ -90,9 +90,14 @@ def create_order(
             "ask the admin to set its department before submitting."
         )
 
+    # Order.department is the **routing target** (the lab that will run
+    # the experiment) — NOT the requester's home dept. This makes the
+    # manager-scoped queries on OrderListView line up with the stage's
+    # department, so a manager sees the order and the stage together when
+    # they belong to that lab.
     order = Order.objects.create(
         user=user,
-        department=user.department,
+        department=target_department,
         experiment=experiment,
         is_urgent=is_urgent,
         lot_id=lot_id,

@@ -104,7 +104,13 @@ class EquipmentStatusMatrixView(APIView):
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 
-        types = EquipmentType.objects.all()
+        # Only return equipment types that actually have at least one unit
+        # in the caller's scope — empty cards just clutter the dashboard
+        # and tip a manager off about machinery that lives in another lab.
+        type_ids_in_scope = (
+            scoped_equipments.values_list('equipment_type_id', flat=True).distinct()
+        )
+        types = EquipmentType.objects.filter(id__in=type_ids_in_scope)
         result = []
         for eq_type in types:
             equipments = scoped_equipments.filter(
