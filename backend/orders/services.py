@@ -66,8 +66,16 @@ def _assert_transition(order: Order, target: str):
 def create_order(*, user, experiment, is_urgent=False, lot_id='', remark='') -> Order:
     """
     Phase 1 – Requester creates order.
-    System generates OrderStage records for each experiment step.
-    Step 1 is set to WAITING, others to PENDING.
+
+    The order is born in WAITING (not IN_PROGRESS) — it is *waiting for the
+    first lab manager to approve & schedule its first stage*. Only after
+    that approval does the order actually transition to IN_PROGRESS, which
+    matches the documented state machine in the module docstring above.
+
+    System also generates one OrderStage per experiment step. Step 1 starts
+    in WAITING (eligible for manager approval). Subsequent steps start in
+    PENDING (locked behind their predecessor) and are flipped to WAITING by
+    ``complete_stage`` once the previous step finishes.
     """
     if not user.department:
         raise ValidationError("User must belong to a department to create orders.")
@@ -79,7 +87,7 @@ def create_order(*, user, experiment, is_urgent=False, lot_id='', remark='') -> 
         is_urgent=is_urgent,
         lot_id=lot_id,
         remark=remark,
-        status=Order.Status.IN_PROGRESS,
+        status=Order.Status.WAITING,
     )
 
     # Generate Stages based on Experiment Steps
@@ -141,6 +149,14 @@ def approve_and_schedule_stage(stage: OrderStage, *, schedule_start, schedule_en
         stage.assignee_id = assignee  # Handle ID string or object
     stage.status = OrderStage.Status.IN_PROGRESS
     stage.save()
+
+    # Promote the parent order from WAITING → IN_PROGRESS the first time any
+    # stage is approved. Subsequent stage approvals are no-ops here because
+    # the order is already IN_PROGRESS.
+    order = stage.order
+    if order.status == Order.Status.WAITING:
+        order.status = Order.Status.IN_PROGRESS
+        order.save(update_fields=['status', 'updated_at'])
 
     # Allocate equipment for THIS stage
     from scheduling.services import allocate_equipments_for_stage

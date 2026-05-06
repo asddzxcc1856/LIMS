@@ -43,8 +43,10 @@ class TestCreateOrder:
         EquipmentFactory(equipment_type=equipment_type, department=employee.department)
         # Act
         order = services.create_order(user=employee, experiment=experiment, lot_id='L-001')
-        # Assert
-        assert order.status == Order.Status.IN_PROGRESS
+        # Assert — order itself is WAITING (not IN_PROGRESS); only the first
+        # stage is WAITING and the rest (here only one) PENDING. Documented
+        # state machine: Created → Waiting (auto) → In Progress (manager approve).
+        assert order.status == Order.Status.WAITING
         assert order.lot_id == 'L-001'
         stages = list(order.stages.order_by('step_order'))
         assert len(stages) == 1
@@ -147,6 +149,41 @@ class TestApproveAndScheduleStage:
         # Assert
         assert result.status == OrderStage.Status.IN_PROGRESS
         assert result.schedule_start.isoformat().startswith('2026-05-02')
+
+    @freeze_time('2026-05-01 10:00:00')
+    def test_first_approval_promotes_order_from_waiting_to_in_progress(
+        self, db, employee, equipment_type, mocker,
+    ):
+        """Regression: previously create_order set the order straight to
+        IN_PROGRESS, skipping the documented WAITING phase. The fix sets
+        new orders to WAITING; the very first stage approval is what
+        promotes them to IN_PROGRESS. This test pins both halves."""
+        mocker.patch(
+            'scheduling.services.allocate_equipments_for_stage', return_value=[],
+        )
+        # Arrange — build a real order via the public API so the WAITING
+        # invariant on creation is also covered.
+        experiment = ExperimentFactory.with_requirement(
+            equipment_type=equipment_type, step_order=1,
+        )
+        EquipmentFactory(equipment_type=equipment_type, department=employee.department)
+        order = services.create_order(user=employee, experiment=experiment)
+        assert order.status == Order.Status.WAITING        # invariant on creation
+        first_stage = order.stages.order_by('step_order').first()
+        assert first_stage.status == OrderStage.Status.WAITING
+
+        # Act — manager approves the first stage
+        services.approve_and_schedule_stage(
+            first_stage,
+            schedule_start='2026-05-02T10:00:00Z',
+            schedule_end='2026-05-02T12:00:00Z',
+        )
+
+        # Assert — order now IN_PROGRESS, stage IN_PROGRESS
+        order.refresh_from_db()
+        first_stage.refresh_from_db()
+        assert order.status == Order.Status.IN_PROGRESS
+        assert first_stage.status == OrderStage.Status.IN_PROGRESS
 
     @freeze_time('2026-05-01 10:00:00')
     def test_assignee_as_uuid_string_does_not_break_notification(
