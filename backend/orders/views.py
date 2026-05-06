@@ -4,6 +4,7 @@ orders/views.py
 from rest_framework import generics, permissions, status as http_status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
 from equipments.models import Experiment
@@ -64,12 +65,10 @@ class OrderListView(generics.ListAPIView):
         if user.role == 'superuser':
             return qs
         if user.role == 'lab_manager' and user.department_id:
-            # See OrderStageListView for why this matches by (fab, name) and
-            # not the raw dept_id — rescues duplicate-Department rows.
             dept = user.department
             return qs.filter(
-                department__fab_id=dept.fab_id,
-                department__name=dept.name,
+                Q(department_id=user.department_id) |
+                Q(department__fab_id=dept.fab_id, department__name=dept.name)
             )
         if user.role == 'lab_member':
             return qs.filter(stages__assignee=user).distinct()
@@ -124,12 +123,10 @@ class OrderDetailView(generics.RetrieveAPIView):
         if user.role == 'superuser':
             return qs
         if user.role == 'lab_manager' and user.department_id:
-            # See OrderStageListView for why this matches by (fab, name)
-            # rather than the raw dept_id.
             dept = user.department
             return qs.filter(
-                department__fab_id=dept.fab_id,
-                department__name=dept.name,
+                Q(department_id=user.department_id) |
+                Q(department__fab_id=dept.fab_id, department__name=dept.name)
             )
         if user.role == 'lab_member':
             return qs.filter(stages__assignee=user).distinct()
@@ -241,17 +238,14 @@ class OrderStageListView(generics.ListAPIView):
         if user.role == 'superuser':
             return qs
         if user.role == 'lab_manager' and user.department_id:
-            # Match by (fab, dept name) rather than dept primary-key alone.
-            # Equivalent in clean data, but rescues the case where a Department
-            # row was provisioned twice (once by seed_data.json, once by the
-            # demo migration) leaving two rows with the same fab+name but
-            # different UUIDs. With pure dept_id matching the manager would
-            # silently see zero stages whenever a stage had been bound to the
-            # *other* row of the duplicate pair.
+            # Primary path: exact dept_id match (the original behaviour).
+            # The (fab, name) branch is a belt-and-braces fallback in case
+            # future data leaves duplicate Department rows in the wild —
+            # Q.OR keeps both working in either direction.
             dept = user.department
             return qs.filter(
-                department__fab_id=dept.fab_id,
-                department__name=dept.name,
+                Q(department_id=user.department_id) |
+                Q(department__fab_id=dept.fab_id, department__name=dept.name)
             )
         if user.role == 'lab_member':
             return qs.filter(assignee=user)
