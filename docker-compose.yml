@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ---------------------------------------------------------------------------
 # LIMS production stack — HTTPS / port 443 via Caddy + Let's Encrypt
 #
