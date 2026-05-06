@@ -46,8 +46,14 @@ const routes = [
     component: OrderTasksView,
     meta: { roles: ['lab_member', 'lab_manager', 'superuser'] },
   },
-  // Equipment
-  { path: '/equipment', name: 'EquipmentDashboard', component: EquipmentDashboardView },
+  // Equipment dashboard — hidden from regular employees / lab members; the
+  // requester UI must not surface the underlying machine inventory.
+  {
+    path: '/equipment',
+    name: 'EquipmentDashboard',
+    component: EquipmentDashboardView,
+    meta: { roles: ['lab_manager', 'superuser'] },
+  },
 
   // Admin (superuser only)
   {

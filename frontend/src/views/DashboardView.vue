@@ -116,7 +116,7 @@
               <template #icon><ThunderboltOutlined /></template>
               {{ t('nav.tasks') }}
             </a-button>
-            <a-button block size="large" @click="goEquipment">
+            <a-button v-if="auth.isManager || auth.isSuperuser" block size="large" @click="goEquipment">
               <template #icon><AppstoreOutlined /></template>
               {{ t('nav.equipment') }}
             </a-button>

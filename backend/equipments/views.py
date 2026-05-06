@@ -36,12 +36,30 @@ class EquipmentTypeListView(generics.ListCreateAPIView):
 
 
 class EquipmentListView(generics.ListCreateAPIView):
-    """GET/POST /api/equipments/"""
+    """GET/POST /api/equipments/
+
+    Scoped per role to keep the requester UI from peeking at machine
+    inventory: lab managers only see their own lab's units; superusers see
+    everything; everyone else gets an empty list.
+    """
     serializer_class = EquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        qs = Equipment.objects.select_related('equipment_type').all()
+        user = self.request.user
+        qs = Equipment.objects.select_related('equipment_type', 'department').all()
+        if user.role == 'superuser':
+            pass  # full access
+        elif user.role == 'lab_manager' and user.department_id:
+            from django.db.models import Q
+            dept = user.department
+            qs = qs.filter(
+                Q(department_id=user.department_id) |
+                Q(department__fab_id=dept.fab_id, department__name=dept.name)
+            )
+        else:
+            return qs.none()
+
         type_id = self.request.query_params.get('type_id')
         if type_id:
             qs = qs.filter(equipment_type_id=type_id)
@@ -61,15 +79,37 @@ class EquipmentDetailView(generics.RetrieveUpdateAPIView):
 class EquipmentStatusMatrixView(APIView):
     """
     GET /api/equipments/status-matrix/
-    Returns all equipment grouped by type with status + active order info.
+
+    Equipment visibility intentionally hidden from requesters: lab managers
+    see only their own lab's units, superusers see everything, anyone else
+    is rejected with 403. The submission UI must not let a regular employee
+    see what machines exist — they only pick the lab + the experiment.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        user = request.user
+        if user.role == 'superuser':
+            scoped_equipments = Equipment.objects.all()
+        elif user.role == 'lab_manager' and user.department_id:
+            dept = user.department
+            from django.db.models import Q
+            scoped_equipments = Equipment.objects.filter(
+                Q(department_id=user.department_id) |
+                Q(department__fab_id=dept.fab_id, department__name=dept.name)
+            )
+        else:
+            return Response(
+                {'detail': 'Equipment overview is restricted to lab managers.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
         types = EquipmentType.objects.all()
         result = []
         for eq_type in types:
-            equipments = Equipment.objects.filter(equipment_type=eq_type).select_related('equipment_type')
+            equipments = scoped_equipments.filter(
+                equipment_type=eq_type
+            ).select_related('equipment_type', 'department')
             items = []
             for eq in equipments:
                 item = {

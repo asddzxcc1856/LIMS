@@ -11,22 +11,40 @@ User = get_user_model()
 class OrderStageSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
     equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
+    equipment_type_id = serializers.CharField(source='equipment_type.id', read_only=True)
     assignee_name = serializers.CharField(source='assignee.username', read_only=True)
     equipment_code = serializers.CharField(source='equipment.code', read_only=True)
-    
-    # Metadata from parent order
+
+    # Metadata from parent order — gives the manager the experiment recipe
+    # context they need to schedule machines/operators per stage.
     order_no = serializers.CharField(source='order.order_no', read_only=True)
     user_name = serializers.CharField(source='order.user.username', read_only=True)
     lot_id = serializers.CharField(source='order.lot_id', read_only=True)
+    experiment_name = serializers.CharField(source='order.experiment.name', read_only=True)
+    is_urgent = serializers.BooleanField(source='order.is_urgent', read_only=True)
+    remark = serializers.CharField(source='order.remark', read_only=True)
+    required_quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderStage
         fields = [
-            'id', 'step_order', 'department_name', 'equipment_type_name',
+            'id', 'step_order', 'department_name', 'equipment_type_name', 'equipment_type_id',
             'status', 'assignee', 'assignee_name', 'equipment', 'equipment_code',
             'order_no', 'user_name', 'lot_id',
-            'schedule_start', 'schedule_end', 'completed_at'
+            'experiment_name', 'is_urgent', 'remark', 'required_quantity',
+            'schedule_start', 'schedule_end', 'completed_at',
         ]
+
+    def get_required_quantity(self, obj):
+        # Quantity comes from the matching ExperimentRequiredEquipment row so
+        # the manager knows how many units of the type they need to allocate.
+        if not obj.order.experiment_id or not obj.equipment_type_id:
+            return None
+        req = obj.order.experiment.required_equipments.filter(
+            equipment_type_id=obj.equipment_type_id,
+            step_order=obj.step_order,
+        ).first()
+        return req.quantity if req else None
 
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -83,14 +101,13 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.Serializer):
     """Requester creates a single-lab-visit order.
 
-    The wafer journey is now driven step by step by the requester: each Order
-    represents exactly one lab visit, so the payload describes WHICH equipment
-    type the wafer needs and (optionally) WHICH lab to send it to. The legacy
-    ``experiment`` field is still accepted as an optional grouping tag.
+    The form is intentionally simple: pick the destination lab and pick the
+    experiment to run. The Experiment row carries the equipment requirements
+    (which equipment types, in which order, how many units), so the lab
+    manager has everything they need to assign dates, operators and machines.
     """
-    equipment_type = serializers.UUIDField()
-    target_department = serializers.UUIDField(required=False, allow_null=True)
-    experiment = serializers.UUIDField(required=False, allow_null=True)
+    target_department = serializers.UUIDField()
+    experiment = serializers.UUIDField()
     is_urgent = serializers.BooleanField(default=False)
     lot_id = serializers.CharField(required=False, default='', allow_blank=True)
     remark = serializers.CharField(required=False, default='', allow_blank=True)

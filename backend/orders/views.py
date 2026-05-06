@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
-from equipments.models import Experiment, EquipmentType
+from equipments.models import Experiment
 from users.models import Department
 from .models import Order, OrderStage
 from .serializers import (
@@ -85,23 +85,15 @@ class OrderCreateView(APIView):
         ser = OrderCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        equipment_type = get_object_or_404(
-            EquipmentType, id=ser.validated_data['equipment_type']
+        target_department = get_object_or_404(
+            Department, id=ser.validated_data['target_department']
         )
-
-        target_department = None
-        target_id = ser.validated_data.get('target_department')
-        if target_id:
-            target_department = get_object_or_404(Department, id=target_id)
-
-        experiment = None
-        experiment_id = ser.validated_data.get('experiment')
-        if experiment_id:
-            experiment = get_object_or_404(Experiment, id=experiment_id)
+        experiment = get_object_or_404(
+            Experiment, id=ser.validated_data['experiment']
+        )
 
         order = services.create_order(
             user=request.user,
-            equipment_type=equipment_type,
             target_department=target_department,
             experiment=experiment,
             is_urgent=ser.validated_data.get('is_urgent', False),
@@ -169,6 +161,7 @@ class OrderReviewView(generics.UpdateAPIView):
                 schedule_start=request.data.get('schedule_start'),
                 schedule_end=request.data.get('schedule_end'),
                 assignee=request.data.get('assignee'),
+                equipment=request.data.get('equipment'),
             )
             return Response({'detail': f'Stage {stage.step_order} approved.'})
 

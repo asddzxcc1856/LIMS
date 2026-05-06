@@ -38,6 +38,14 @@
           <template v-if="column.dataIndex === 'step_order'">
             <a-tag color="blue">{{ t('review.step') }} {{ record.step_order }}</a-tag>
           </template>
+          <template v-else-if="column.dataIndex === 'required_quantity'">
+            <a-tag v-if="record.required_quantity">×{{ record.required_quantity }}</a-tag>
+            <span v-else class="muted">—</span>
+          </template>
+          <template v-else-if="column.dataIndex === 'is_urgent'">
+            <a-tag v-if="record.is_urgent" color="red">{{ t('orders.urgent') }}</a-tag>
+            <span v-else class="muted">—</span>
+          </template>
           <template v-else-if="column.dataIndex === '__actions__'">
             <a-space>
               <a-button type="primary" size="small" @click="openApprove(record)">
@@ -74,6 +82,12 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.dataIndex === 'step_order'">
             <a-tag color="blue">{{ t('review.step') }} {{ record.step_order }}</a-tag>
+          </template>
+          <template v-else-if="column.dataIndex === 'equipment_code'">
+            <a-tag v-if="record.equipment_code" color="purple">
+              {{ record.equipment_code }}
+            </a-tag>
+            <span v-else class="muted">{{ t('common.notAssigned') }}</span>
           </template>
           <template v-else-if="column.dataIndex === 'assignee_name'">
             <a-tag v-if="record.assignee_name" color="cyan">
@@ -127,9 +141,12 @@
       <a-form layout="vertical">
         <a-form-item :label="t('review.noteOrderStep')">
           <a-input
-            :value="`${approveTarget?.order_no} · ${t('review.step')} ${approveTarget?.step_order}`"
+            :value="`${approveTarget?.order_no} · ${t('review.step')} ${approveTarget?.step_order} · ${approveTarget?.equipment_type_name || ''}`"
             readonly
           />
+        </a-form-item>
+        <a-form-item v-if="approveTarget?.experiment_name" :label="t('review.experiment')">
+          <a-input :value="approveTarget.experiment_name" readonly />
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
@@ -155,6 +172,17 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <a-form-item :label="t('review.assignMachine')">
+          <a-select
+            v-model:value="approveEquipment"
+            :placeholder="t('review.autoPickMachine')"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            :options="machineOptionsForTarget"
+            :loading="loadingMachines"
+          />
+        </a-form-item>
         <a-form-item :label="t('review.assignTo')">
           <a-select
             v-model:value="assignee"
@@ -311,17 +339,22 @@ const memberOptions = computed(() =>
 
 const waitingColumns = computed(() => [
   { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200 },
-  { title: t('review.step'), dataIndex: 'step_order', width: 100 },
+  { title: t('review.experiment'), dataIndex: 'experiment_name', width: 160 },
+  { title: t('review.step'), dataIndex: 'step_order', width: 90 },
   { title: t('orders.equipmentType'), dataIndex: 'equipment_type_name' },
+  { title: t('review.requiredQty'), dataIndex: 'required_quantity', width: 80 },
   { title: t('review.requester'), dataIndex: 'user_name', width: 140 },
   { title: t('orders.lotId'), dataIndex: 'lot_id', width: 120 },
+  { title: t('orders.urgent'), dataIndex: 'is_urgent', width: 80 },
   { title: '', dataIndex: '__actions__', width: 220, fixed: 'right' },
 ])
 
 const activeColumns = computed(() => [
   { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200 },
-  { title: t('review.step'), dataIndex: 'step_order', width: 100 },
+  { title: t('review.experiment'), dataIndex: 'experiment_name', width: 160 },
+  { title: t('review.step'), dataIndex: 'step_order', width: 90 },
   { title: t('orders.equipmentType'), dataIndex: 'equipment_type_name', width: 160 },
+  { title: t('review.machine'), dataIndex: 'equipment_code', width: 140 },
   { title: t('review.assignee'), dataIndex: 'assignee_name', width: 160 },
   { title: t('orders.schedule'), dataIndex: 'schedule', width: 240 },
   { title: '', dataIndex: '__actions__', width: 140, fixed: 'right' },
@@ -333,9 +366,23 @@ const approveTarget = ref(null)
 const scheduleStart = ref(null)
 const scheduleEnd = ref(null)
 const assignee = ref(null)
+const approveEquipment = ref(null)
 const approveBusy = ref(false)
 const approveError = ref('')
 const scheduleWarning = ref('')
+const labMachines = ref([])
+const loadingMachines = ref(false)
+
+const machineOptionsForTarget = computed(() => {
+  if (!approveTarget.value?.equipment_type_id) return []
+  return labMachines.value
+    .filter((eq) => eq.equipment_type === approveTarget.value.equipment_type_id)
+    .map((eq) => ({
+      value: eq.id,
+      label: `${eq.code} · ${eq.status}`,
+      disabled: eq.status !== 'available',
+    }))
+})
 
 // Reject modal state
 const rejectOpen = ref(false)
@@ -367,9 +414,23 @@ async function reloadAll() {
     // — most commonly /equipments/status-matrix/ when a manager has no
     // matching dept — doesn't blank out the stages table that already
     // loaded successfully. Each loader does its own try/catch internally.
-    await Promise.allSettled([loadStages(), loadMembers(), loadTimelineData()])
+    await Promise.allSettled([
+      loadStages(), loadMembers(), loadTimelineData(), loadMachines(),
+    ])
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMachines() {
+  loadingMachines.value = true
+  try {
+    const { data } = await client.get('/equipments/')
+    labMachines.value = data.results || data || []
+  } catch {
+    labMachines.value = []
+  } finally {
+    loadingMachines.value = false
   }
 }
 
@@ -422,6 +483,7 @@ function openApprove(stage) {
   scheduleStart.value = null
   scheduleEnd.value = null
   assignee.value = null
+  approveEquipment.value = null
   approveError.value = ''
   scheduleWarning.value = ''
   approveOpen.value = true
@@ -453,10 +515,11 @@ async function confirmApprove() {
       schedule_start: scheduleStart.value.toISOString(),
       schedule_end: scheduleEnd.value.toISOString(),
       assignee: assignee.value,
+      equipment: approveEquipment.value,
     })
     approveOpen.value = false
     message.success(t('review.approveSuccess'))
-    await Promise.all([loadStages(), loadTimelineData()])
+    await Promise.all([loadStages(), loadTimelineData(), loadMachines()])
   } catch (e) {
     approveError.value = e.response?.data?.detail || t('review.approveFailed')
   } finally {

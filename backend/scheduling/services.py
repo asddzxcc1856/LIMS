@@ -115,25 +115,51 @@ def allocate_equipments(order):
 
     return bookings
 
-def allocate_equipments_for_stage(stage):
+def allocate_equipments_for_stage(stage, equipment_id=None):
     """
-    Allocates a single equipment from the stage's department and type.
+    Allocates a single equipment unit to the stage.
+
+    If ``equipment_id`` is provided, the manager's pick is honoured (after
+    sanity-checking it lives in the right lab + matches the equipment type +
+    is free in the requested window). Otherwise we auto-pick the first
+    available unit of the right type in the stage's lab.
     """
     start = stage.schedule_start
     end = stage.schedule_end
-    
-    # 1. Find candidates in the same Lab (Department)
+
     conflicting_ids = _get_conflicting_equipment_ids(start, end)
-    candidates = Equipment.objects.filter(
-        equipment_type_id=stage.equipment_type_id,
-        department_id=stage.department_id,
-        status=Equipment.Status.AVAILABLE,
-    ).exclude(id__in=conflicting_ids)
 
-    if not candidates.exists():
-        raise ValidationError(f'No available "{stage.equipment_type.name}" found in the designated lab for this time window.')
+    if equipment_id:
+        # Manager picked a specific machine — validate it.
+        try:
+            chosen_eq = Equipment.objects.get(id=equipment_id)
+        except Equipment.DoesNotExist:
+            raise ValidationError('Selected machine does not exist.')
+        if chosen_eq.equipment_type_id != stage.equipment_type_id:
+            raise ValidationError(
+                f'Selected machine is not a "{stage.equipment_type.name}".'
+            )
+        if chosen_eq.department_id != stage.department_id:
+            raise ValidationError('Selected machine belongs to a different lab.')
+        if chosen_eq.status != Equipment.Status.AVAILABLE:
+            raise ValidationError('Selected machine is not available.')
+        if chosen_eq.id in conflicting_ids:
+            raise ValidationError(
+                'Selected machine is already booked in this time window.'
+            )
+    else:
+        candidates = Equipment.objects.filter(
+            equipment_type_id=stage.equipment_type_id,
+            department_id=stage.department_id,
+            status=Equipment.Status.AVAILABLE,
+        ).exclude(id__in=conflicting_ids)
 
-    chosen_eq = candidates.first()
+        if not candidates.exists():
+            raise ValidationError(
+                f'No available "{stage.equipment_type.name}" found in the '
+                'designated lab for this time window.'
+            )
+        chosen_eq = candidates.first()
 
     # 2. Pessimistic lock + Double-check
     with transaction.atomic():

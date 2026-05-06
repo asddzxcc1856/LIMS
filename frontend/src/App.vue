@@ -225,7 +225,13 @@ const menuConfig = computed(() => [
     path: '/orders/tasks',
     visible: () => auth.isMember,
   },
-  { key: 'equipment', label: t('nav.equipment'), icon: AppstoreOutlined, path: '/equipment' },
+  {
+    key: 'equipment',
+    label: t('nav.equipment'),
+    icon: AppstoreOutlined,
+    path: '/equipment',
+    visible: () => auth.isManager || auth.isSuperuser,
+  },
 ])
 
 const visibleMenu = computed(() =>

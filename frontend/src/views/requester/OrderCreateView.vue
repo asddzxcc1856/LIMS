@@ -39,23 +39,23 @@
                 option-filter-prop="label"
                 size="large"
                 :options="labOptions"
-                @change="onLabChange"
+                :loading="loadingLabs"
               />
             </a-form-item>
 
             <a-form-item
-              :label="t('createOrder.equipmentTypeLabel')"
-              name="equipment_type"
-              :rules="[{ required: true, message: t('createOrder.requireEquipmentType') }]"
+              :label="t('createOrder.experimentLabel')"
+              name="experiment"
+              :rules="[{ required: true, message: t('createOrder.requireExperiment') }]"
             >
               <a-select
-                v-model:value="form.equipment_type"
-                :placeholder="form.target_department ? t('createOrder.equipmentTypePlaceholder') : t('createOrder.pickLabFirst')"
+                v-model:value="form.experiment"
+                :placeholder="t('createOrder.experimentPlaceholder')"
                 show-search
                 option-filter-prop="label"
                 size="large"
-                :options="equipmentTypeOptions"
-                :disabled="!form.target_department"
+                :options="experimentOptions"
+                :loading="loadingExperiments"
               />
             </a-form-item>
 
@@ -111,51 +111,48 @@
       </a-col>
 
       <a-col :xs="24" :lg="10">
-        <a-card :bordered="false" :title="t('createOrder.targetLabPreview')" class="side-card">
+        <a-card :bordered="false" :title="t('createOrder.requirementPreview')" class="side-card">
           <a-empty
-            v-if="!form.target_department"
-            :description="t('createOrder.pickLabHint')"
+            v-if="!form.experiment"
+            :description="t('createOrder.requirementHint')"
           />
           <template v-else>
             <a-descriptions :column="1" size="small">
-              <a-descriptions-item :label="t('createOrder.targetLabLabel')">
-                <span class="font-bold">{{ selectedLabName }}</span>
+              <a-descriptions-item :label="t('createOrder.experimentLabel')">
+                <span class="font-bold">{{ selectedExp?.name }}</span>
               </a-descriptions-item>
-              <a-descriptions-item :label="t('createOrder.availableTypes')">
-                <a-space wrap>
-                  <a-tag
-                    v-for="t in equipmentTypesAtLab"
-                    :key="t.id"
-                    :color="t.id === form.equipment_type ? 'blue' : 'default'"
-                  >
-                    {{ t.name }}
-                  </a-tag>
-                </a-space>
+              <a-descriptions-item v-if="selectedExp?.remark" :label="t('orders.remark')">
+                <span class="muted">{{ selectedExp.remark }}</span>
               </a-descriptions-item>
             </a-descriptions>
 
-            <a-divider style="margin: 12px 0" />
+            <a-divider style="margin: 12px 0">{{ t('createOrder.requiredEquipments') }}</a-divider>
 
-            <div v-if="form.equipment_type">
-              <div class="muted" style="margin-bottom: 6px">
-                {{ t('createOrder.unitsAtLab') }}
-              </div>
-              <a-list
-                :data-source="unitsForSelected"
-                size="small"
-              >
-                <template #renderItem="{ item }">
-                  <a-list-item>
-                    <a-space>
-                      <a-tag :color="item.status === 'available' ? 'success' : 'warning'">
-                        {{ item.status }}
-                      </a-tag>
-                      <span class="font-bold">{{ item.code }}</span>
-                    </a-space>
-                  </a-list-item>
-                </template>
-              </a-list>
-            </div>
+            <a-empty
+              v-if="!(selectedExp?.required_equipments || []).length"
+              :description="t('createOrder.noRequirement')"
+            />
+            <a-list
+              v-else
+              :data-source="selectedExp.required_equipments"
+              size="small"
+            >
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-list-item-meta>
+                    <template #title>
+                      <a-space>
+                        <a-tag color="blue">{{ t('review.step') }} {{ item.step_order }}</a-tag>
+                        <span class="font-bold">{{ item.equipment_type_name }}</span>
+                      </a-space>
+                    </template>
+                    <template #description>
+                      <span class="muted">{{ t('createOrder.quantity') }}: {{ item.quantity }}</span>
+                    </template>
+                  </a-list-item-meta>
+                </a-list-item>
+              </template>
+            </a-list>
           </template>
         </a-card>
       </a-col>
@@ -168,12 +165,16 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { SendOutlined } from '@ant-design/icons-vue'
-import { fetchEquipments } from '../../api/equipments'
+import { fetchExperiments } from '../../api/equipments'
+import { fetchDepartments } from '../../api/users'
 import { createOrder } from '../../api/orders'
 
 const { t } = useI18n()
 
-const equipments = ref([])
+const departments = ref([])
+const experiments = ref([])
+const loadingLabs = ref(false)
+const loadingExperiments = ref(false)
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
@@ -181,67 +182,50 @@ const createdOrderNo = ref(null)
 
 const form = reactive({
   target_department: undefined,
-  equipment_type: undefined,
+  experiment: undefined,
   is_urgent: false,
   lot_id: '',
   remark: '',
 })
 
-// Group equipments by department for the lab dropdown.
-const labOptions = computed(() => {
-  const map = new Map()
-  for (const eq of equipments.value) {
-    if (!eq.department) continue
-    if (!map.has(eq.department)) {
-      map.set(eq.department, eq.department_name || eq.department)
-    }
-  }
-  return Array.from(map.entries()).map(([id, name]) => ({ value: id, label: name }))
-})
-
-const selectedLabName = computed(() => {
-  const opt = labOptions.value.find((o) => o.value === form.target_department)
-  return opt?.label || ''
-})
-
-// Equipment types available within the picked lab (deduped by type id).
-const equipmentTypesAtLab = computed(() => {
-  if (!form.target_department) return []
-  const seen = new Map()
-  for (const eq of equipments.value) {
-    if (eq.department !== form.target_department) continue
-    if (!seen.has(eq.equipment_type)) {
-      seen.set(eq.equipment_type, { id: eq.equipment_type, name: eq.type_name })
-    }
-  }
-  return Array.from(seen.values())
-})
-
-const equipmentTypeOptions = computed(() =>
-  equipmentTypesAtLab.value.map((t) => ({ value: t.id, label: t.name })),
+const labOptions = computed(() =>
+  departments.value.map((d) => ({
+    value: d.id,
+    label: d.fab_name ? `${d.fab_name} · ${d.name}` : d.name,
+  })),
 )
 
-const unitsForSelected = computed(() =>
-  equipments.value.filter(
-    (eq) =>
-      eq.department === form.target_department &&
-      eq.equipment_type === form.equipment_type,
-  ),
+const experimentOptions = computed(() =>
+  experiments.value.map((exp) => ({ value: exp.id, label: exp.name })),
+)
+
+const selectedExp = computed(() =>
+  experiments.value.find((e) => e.id === form.experiment),
 )
 
 onMounted(async () => {
+  loadingLabs.value = true
+  loadingExperiments.value = true
   try {
-    const { data } = await fetchEquipments()
-    equipments.value = data.results || data
-  } catch {
-    message.error(t('createOrder.loadEquipmentsFailed'))
+    const [labsRes, expRes] = await Promise.allSettled([
+      fetchDepartments(),
+      fetchExperiments(),
+    ])
+    if (labsRes.status === 'fulfilled') {
+      departments.value = labsRes.value.data.results || labsRes.value.data || []
+    } else {
+      message.error(t('createOrder.loadLabsFailed'))
+    }
+    if (expRes.status === 'fulfilled') {
+      experiments.value = expRes.value.data.results || expRes.value.data || []
+    } else {
+      message.error(t('createOrder.loadExpFailed'))
+    }
+  } finally {
+    loadingLabs.value = false
+    loadingExperiments.value = false
   }
 })
-
-function onLabChange() {
-  // Reset the type when the lab changes — types are scoped to the picked lab.
-  form.equipment_type = undefined
-}
 
 async function handleSubmit() {
   error.value = ''
@@ -249,7 +233,7 @@ async function handleSubmit() {
   try {
     const payload = {
       target_department: form.target_department,
-      equipment_type: form.equipment_type,
+      experiment: form.experiment,
       is_urgent: form.is_urgent,
       lot_id: form.lot_id,
       remark: form.remark,
@@ -273,7 +257,7 @@ async function handleSubmit() {
 
 function resetForm() {
   form.target_department = undefined
-  form.equipment_type = undefined
+  form.experiment = undefined
   form.is_urgent = false
   form.lot_id = ''
   form.remark = ''
