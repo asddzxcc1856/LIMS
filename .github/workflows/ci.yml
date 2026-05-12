@@ -2,100 +2,203 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop, staging]
   pull_request:
-    branches: [main]
+    branches: [main, develop, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Cancel in-progress runs of the same branch when a new push arrives.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────
-  # Backend: pytest (76 unit + integration tests, AAA + 5 test-double styles)
-  # ─────────────────────────────────────────────────────────────────────────
+  # -------------------------------------------------------------------------
+  # Backend: Django checks, migration drift check, pytest + coverage artifact.
+  # -------------------------------------------------------------------------
   backend:
-    name: Backend (pytest)
+    name: Backend (Django + pytest)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pytest
+      - name: Django system check
         env:
           DJANGO_SETTINGS_MODULE: backend.settings
           DJANGO_DEBUG: 'True'
-        run: pytest --tb=short
+        run: python manage.py check
 
-      - name: Upload coverage
+      - name: Check migrations are committed
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_DEBUG: 'True'
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run pytest with coverage
+        env:
+          DJANGO_SETTINGS_MODULE: backend.settings
+          DJANGO_DEBUG: 'True'
+        run: |
+          pytest \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html \
+            --tb=short
+
+      - name: Upload backend coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: backend/htmlcov/
+          path: |
+            backend/coverage.xml
+            backend/htmlcov/
           if-no-files-found: ignore
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # Frontend unit / component tests (vitest)
-  # ─────────────────────────────────────────────────────────────────────────
-  frontend-unit:
-    name: Frontend unit (vitest)
+  # -------------------------------------------------------------------------
+  # Frontend: unit/component tests, coverage artifact, production build.
+  # -------------------------------------------------------------------------
+  frontend:
+    name: Frontend (Vitest + build)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # End-to-end tests (Playwright). Boots Django + Vite together.
-  # ─────────────────────────────────────────────────────────────────────────
+      - name: Run unit/component tests with coverage
+        run: npm run test:coverage
+
+      - name: Build SPA
+        run: npm run build
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          if-no-files-found: ignore
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # Infra: Helm chart renders for every environment and Terraform formatting /
+  # validation stays healthy before image publication.
+  # -------------------------------------------------------------------------
+  infra:
+    name: Infra (Helm + Terraform)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: Helm lint
+        run: |
+          helm lint helm/lims -f helm/lims/envs/local.yaml --set image.tag=ci
+          helm lint helm/lims -f helm/lims/envs/dev.yaml --set image.tag=ci
+          helm lint helm/lims -f helm/lims/envs/staging.yaml --set image.tag=ci
+          helm lint helm/lims -f helm/lims/envs/prod.yaml --set image.tag=ci
+
+      - name: Helm template render check
+        run: |
+          for env in local dev staging prod; do
+            helm template "lims-${env}" helm/lims \
+              -f "helm/lims/envs/${env}.yaml" \
+              --set image.tag=ci \
+              > /tmp/lims-${env}.yaml
+          done
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive infra
+
+      - name: Terraform validate
+        run: |
+          for env in dev staging prod; do
+            terraform -chdir="infra/envs/${env}" init -backend=false
+            terraform -chdir="infra/envs/${env}" validate
+          done
+
+  # -------------------------------------------------------------------------
+  # End-to-end tests: boots Django and lets Playwright manage the Vite server.
+  # -------------------------------------------------------------------------
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    needs: [backend, frontend-unit]
+    needs: [backend, frontend]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Python / Django backend
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
           cache-dependency-path: backend/requirements.txt
-      - name: Install backend deps
+
+      - name: Install backend dependencies
         working-directory: backend
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Migrate + load seed data + provision admin
+
+      - name: Prepare backend database
         working-directory: backend
         env:
           DJANGO_SETTINGS_MODULE: backend.settings
@@ -104,40 +207,46 @@ jobs:
           python manage.py migrate --noinput
           python manage.py loaddata seed_data.json || true
           python manage.py ensure_admin
-      - name: Start Django backend (background)
+
+      - name: Start Django backend
         working-directory: backend
         env:
           DJANGO_SETTINGS_MODULE: backend.settings
           DJANGO_DEBUG: 'True'
         run: |
           nohup python manage.py runserver 127.0.0.1:8000 --noreload > backend.log 2>&1 &
-          # Wait for the API to come up (max ~30s)
           for i in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://127.0.0.1:8000/api/users/login/ -X POST \
-                -H "Content-Type: application/json" -d '{}'; then
-              echo "Backend up after ${i}s"; break
+            if curl -fsS http://127.0.0.1:8000/healthz >/dev/null; then
+              echo "Backend is ready after ${i}s"
+              exit 0
             fi
             sleep 1
           done
+          echo "Backend did not become ready in time"
+          cat backend.log
+          exit 1
 
-      # Node / Playwright
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install frontend deps
+
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
       - name: Install Playwright browsers
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+
       - name: Run Playwright suite
         working-directory: frontend
         env:
           E2E_ADMIN_PASSWORD: 'Admin@LIMS_2026!Sup'
           CI: '1'
-        run: npx playwright test
+        run: npm run e2e
 
       - name: Upload Playwright report
         if: always()
@@ -147,10 +256,46 @@ jobs:
           path: frontend/playwright-report/
           if-no-files-found: ignore
 
-      - name: Upload Django log on failure
-        if: failure()
+      - name: Upload Django log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: django-server-log
           path: backend/backend.log
           if-no-files-found: ignore
+
+  # -------------------------------------------------------------------------
+  # Docker: build images as a CI validation step. This does not publish images.
+  # -------------------------------------------------------------------------
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, infra, e2e]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile.k8s
+          push: false
+          tags: lims/backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile.k8s
+          build-args: VITE_API_BASE=/api
+          push: false
+          tags: lims/frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
