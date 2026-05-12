@@ -48,8 +48,8 @@ resource "google_sql_database_instance" "mysql" {
     }
 
     maintenance_window {
-      day          = 7   # Sunday
-      hour         = 18  # 18:00 UTC = 02:00 next day in Asia/Taipei
+      day          = 7  # Sunday
+      hour         = 18 # 18:00 UTC = 02:00 next day in Asia/Taipei
       update_track = "stable"
     }
   }
@@ -78,5 +78,5 @@ resource "google_sql_user" "lims" {
 }
 
 output "connection_name" { value = google_sql_database_instance.mysql.connection_name }
-output "private_ip"      { value = google_sql_database_instance.mysql.private_ip_address }
-output "instance_name"   { value = google_sql_database_instance.mysql.name }
+output "private_ip" { value = google_sql_database_instance.mysql.private_ip_address }
+output "instance_name" { value = google_sql_database_instance.mysql.name }
