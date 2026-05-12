@@ -70,8 +70,11 @@ module "iam" {
 }
 
 output "ingress_static_ip_address" { value = module.network.ingress_static_ip_address }
-output "ingress_static_ip_name"    { value = module.network.ingress_static_ip_name }
-output "cluster_name"              { value = module.gke.cluster_name }
-output "cloudsql_connection_name"  { value = module.cloudsql.connection_name }
-output "redis_url"                 { value = module.memorystore.redis_url, sensitive = true }
-output "runtime_gsa_email"         { value = module.iam.runtime_gsa_email }
+output "ingress_static_ip_name" { value = module.network.ingress_static_ip_name }
+output "cluster_name" { value = module.gke.cluster_name }
+output "cloudsql_connection_name" { value = module.cloudsql.connection_name }
+output "redis_url" {
+  value     = module.memorystore.redis_url
+  sensitive = true
+}
+output "runtime_gsa_email" { value = module.iam.runtime_gsa_email }

@@ -103,18 +103,21 @@ module "iam" {
   region            = var.region
   name_prefix       = local.name_prefix
   namespace         = local.namespace
-  enable_ci_builder = true                # <-- ONLY in prod
+  enable_ci_builder = true # <-- ONLY in prod
   github_org        = var.github_org
   github_repo       = var.github_repo
 }
 
 # Surfaces every value the Helm chart / DDNS / GitHub Actions need.
 output "ingress_static_ip_address" { value = module.network.ingress_static_ip_address }
-output "ingress_static_ip_name"    { value = module.network.ingress_static_ip_name }
-output "cluster_name"              { value = module.gke.cluster_name }
-output "cloudsql_connection_name"  { value = module.cloudsql.connection_name }
-output "redis_url"                 { value = module.memorystore.redis_url, sensitive = true }
-output "artifact_registry_path"    { value = module.artifact_registry.repository_path }
-output "runtime_gsa_email"         { value = module.iam.runtime_gsa_email }
-output "ci_builder_email"          { value = module.iam.ci_builder_email }
-output "wif_provider_resource"     { value = module.iam.wif_provider_resource }
+output "ingress_static_ip_name" { value = module.network.ingress_static_ip_name }
+output "cluster_name" { value = module.gke.cluster_name }
+output "cloudsql_connection_name" { value = module.cloudsql.connection_name }
+output "redis_url" {
+  value     = module.memorystore.redis_url
+  sensitive = true
+}
+output "artifact_registry_path" { value = module.artifact_registry.repository_path }
+output "runtime_gsa_email" { value = module.iam.runtime_gsa_email }
+output "ci_builder_email" { value = module.iam.ci_builder_email }
+output "wif_provider_resource" { value = module.iam.wif_provider_resource }
