@@ -7,7 +7,7 @@ nameOverride: lims
 fullnameOverride: ""
 
 image:
-  registry: us-central1-docker.pkg.dev/REPLACE-ME/lims
+  registry: asia-east1-docker.pkg.dev/tsmc-lims/lims
   pullPolicy: IfNotPresent
   tag: ""                                         # CI bumps this in lims-gitops
 
