@@ -3,7 +3,7 @@ terraform {
 
   backend "gcs" {
     # Created manually before first `terraform init`. See infra/README.md.
-    bucket = "lims-tfstate-prod"
+    bucket = "tsmc-lims-tfstate-prod"
     prefix = "infra"
   }
 
