@@ -20,8 +20,8 @@ spec:
       sources:
         # 1. The chart — lives in the application repo so PRs review the
         #    template and the code together.
-        - repoURL: https://github.com/REPLACE-ME/lims.git
-          targetRevision: main
+        - repoURL: https://github.com/asddzxcc1856/LIMS.git
+          targetRevision: steven-test
           path: helm/lims
           helm:
             valueFiles:
@@ -29,17 +29,13 @@ spec:
               - 'envs/{{.env}}.yaml'
               - '$values/gitops/envs/{{.env}}/values.yaml'
         # 2. CI-bumped overrides — image.tag pinned per env.
-        - repoURL: https://github.com/REPLACE-ME/lims.git
-          targetRevision: main
+        - repoURL: https://github.com/asddzxcc1856/LIMS.git
+          targetRevision: steven-test
           ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
       syncPolicy:
-        automated:
-          prune: '{{.prune}}'
-          selfHeal: '{{.selfHeal}}'
-          allowEmpty: false
         syncOptions:
           - CreateNamespace=true
           - PrunePropagationPolicy=foreground
