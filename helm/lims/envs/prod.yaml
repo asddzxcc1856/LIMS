@@ -21,8 +21,8 @@ ingress:
 backend:
   replicas: 1
   resources:
-    requests: { cpu: 250m, memory: 512Mi }
-    limits:   { cpu: "1",  memory: 1Gi   }
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 250m, memory: 256Mi }
   hpa: { enabled: true, min: 1, max: 2, targetCPUUtilizationPercentage: 75 }
   pdb: { minAvailable: 0 }      # 1 replica → can't keep min 1 during voluntary disruption
   gunicornWorkers: 3
