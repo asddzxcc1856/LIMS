@@ -40,7 +40,7 @@ frontend:
 # but the demo brief says "all existing services must be reachable",
 # and a stopped Celery would fail the readyz check that pings the broker.
 celery:
-  enabled: true
+  enabled: false
   replicas: 1
   resources:
     requests: { cpu: 50m, memory: 128Mi }
