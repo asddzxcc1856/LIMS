@@ -42,6 +42,7 @@ spec:
     - { group: 'monitoring.coreos.com', kind: PodMonitor }
     - { group: 'monitoring.coreos.com', kind: ServiceMonitor }
     - { group: 'monitoring.coreos.com', kind: PrometheusRule }
+    - { group: 'monitoring.googleapis.com', kind: PodMonitoring }
   roles:
     - name: read-only
       description: View-only access for everyone in the lims-readers group
