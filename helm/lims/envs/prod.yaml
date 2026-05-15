@@ -21,8 +21,8 @@ ingress:
 backend:
   replicas: 1
   resources:
-    requests: { cpu: 50m, memory: 128Mi }
-    limits:   { cpu: 250m, memory: 256Mi }
+    requests: { cpu: 25m, memory: 64Mi }
+    limits:   { cpu: 100m, memory: 128Mi }
   hpa: { enabled: true, min: 1, max: 2, targetCPUUtilizationPercentage: 75 }
   pdb: { minAvailable: 0 }      # 1 replica → can't keep min 1 during voluntary disruption
   gunicornWorkers: 3
@@ -100,7 +100,7 @@ metrics:
   podMonitor:
     enabled: false                  # PodMonitor (Prom Operator CRD) — not used in demo
 managedPrometheus:
-  enabled: true                     # GKE Managed Prometheus — Google scrapes /metrics for us
+  enabled: false                     # GKE Managed Prometheus — Google scrapes /metrics for us
 
 # ── ServiceAccount + Workload Identity ──────────────────────────────────
 serviceAccount:
