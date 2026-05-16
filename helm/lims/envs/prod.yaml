@@ -12,6 +12,9 @@
 # When this becomes a real production workload, see Scenario A in
 # docs/07-DEMO-COST-OPTIMIZATION.md to scale up.
 env: prod
+image:
+  repository: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend
+  tag: latest
 ingress:
   host: lims.ddns.net
   staticIp: lims-prod-ingress-ip
