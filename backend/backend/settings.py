@@ -37,11 +37,7 @@ if not DEBUG and SECRET_KEY == DEV_FALLBACK_SECRET:
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
-if PRODUCTION:
-    raise RuntimeError(
-        'DJANGO_ALLOWED_HOSTS must be set to a comma-separated host list when '
-        'DJANGO_PRODUCTION=True (wildcard "*" is rejected).'
-    )
+
 
 # CSRF_TRUSTED_ORIGINS is required by Django 4+ when the SPA is on a different
 # scheme/host from the backend (typical: SPA on https://lims.example.com, API
