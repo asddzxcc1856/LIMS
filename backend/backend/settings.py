@@ -254,10 +254,11 @@ SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 if PRODUCTION:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
-     SECURE_REDIRECT_EXEMPT = [
+    SECURE_REDIRECT_EXEMPT = [
         r"^healthz$",
         r"^readyz$",
     ]
+    SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30        # 30 days; raise after stable
