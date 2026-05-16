@@ -59,6 +59,7 @@ spec:
           args:
             - "--private-ip"
             - "--port=3306"
+            - "--auto-iam-authn"
             - "--quitquitquit"
             - {{ .Values.cloudSql.connectionName | quote }}
 
