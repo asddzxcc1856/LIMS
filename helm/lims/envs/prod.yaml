@@ -78,7 +78,7 @@ redis:
 config:
   DJANGO_DEBUG: "False"
   DJANGO_PRODUCTION: "True"
-  DJANGO_ALLOWED_HOSTS: lims.ddns.net
+  DJANGO_ALLOWED_HOSTS: "lims.ddns.net,localhost,127.0.0.1"
   CORS_ALLOWED_ORIGINS: https://lims.ddns.net
   CSRF_TRUSTED_ORIGINS: https://lims.ddns.net
   SEED_DEMO_DATA: "True"            # demo: keep the seed accounts/lots so reviewers can log in
