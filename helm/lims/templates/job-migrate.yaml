@@ -30,11 +30,11 @@ spec:
         - name: migrate
           image: {{ include "lims.image.backend" . | quote }}
           command:
-	  - /bin/sh
-	  - -c
-	  - |
-	    python manage.py migrate --noinput
-	    pkill cloud-sql-proxy || true
+            - /bin/sh
+            - -c
+            - |
+              python manage.py migrate --noinput
+              pkill cloud-sql-proxy || true
           envFrom:
             - configMapRef: { name: {{ include "lims.fullname" . }}-config }
             # The Secret is created either by ExternalSecret (prod) or
