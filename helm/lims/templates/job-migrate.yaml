@@ -60,6 +60,7 @@ spec:
             - "--private-ip"
             - "--port=3306"
             - "--auto-iam-authn"
+            - "--token-path=/var/run/secrets/tokens/gcp-ksa/token"
             - "--quitquitquit"
             - {{ .Values.cloudSql.connectionName | quote }}
 
@@ -79,10 +80,22 @@ spec:
             capabilities:
               drop:
                 - ALL
+
+          volumeMounts:
+            - name: google-cloud-key
+              mountPath: /var/run/secrets/tokens/gcp-ksa
+              readOnly: true
         {{- end }}
 
+      # 這裡成功將兩個 volume 併入同一個陣列，完全解決縮排與重複宣告問題
       volumes:
         - name: tmp
           emptyDir: {}
-
+        - name: google-cloud-key
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+                  audience: google-saml
 {{- end }}
