@@ -72,6 +72,16 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
+
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets
+              readOnly: true
         {{- end }}
+
       volumes:
         - { name: tmp, emptyDir: {} }
+
+        - name: cloudsql-instance-credentials
+          secret:
+            secretName: cloudsql-instance-credentials
