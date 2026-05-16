@@ -32,6 +32,9 @@ backend:
 
 # ── Frontend ─────────────────────────────────────────────────────────────
 frontend:
+  image:
+    repository: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend
+    tag: latest
   replicas: 1
   resources:
     requests: { cpu: 50m, memory: 64Mi }
