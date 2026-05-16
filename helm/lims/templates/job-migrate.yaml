@@ -26,6 +26,7 @@ spec:
       restartPolicy: Never
       serviceAccountName: {{ include "lims.serviceAccountName" . }}
       securityContext: {{- include "lims.podSecurityContext" . | nindent 8 }}
+
       containers:
         - name: migrate
           image: {{ include "lims.image.backend" . | quote }}
@@ -34,25 +35,32 @@ spec:
             - -c
             - |
               python manage.py migrate --noinput
-              wget -qO- http://127.0.0.1:9091/quitquitquit || true
+              python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9091/quitquitquit')"
+
           envFrom:
-            - configMapRef: { name: {{ include "lims.fullname" . }}-config }
-            # The Secret is created either by ExternalSecret (prod) or
-            # by templates/local-secret.yaml (kind) — same name either way.
-            - secretRef: { name: {{ include "lims.fullname" . }}-secrets }
+            - configMapRef:
+                name: {{ include "lims.fullname" . }}-config
+            - secretRef:
+                name: {{ include "lims.fullname" . }}-secrets
+
           resources: {{- toYaml .Values.migrate.resources | nindent 12 }}
+
           securityContext: {{- include "lims.containerSecurityContext" . | nindent 12 }}
+
           volumeMounts:
-            - { name: tmp, mountPath: /tmp }
+            - name: tmp
+              mountPath: /tmp
 
         {{- if .Values.cloudSql.enabled }}
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+
           args:
             - "--private-ip"
             - "--port=3306"
             - "--quitquitquit"
             - {{ .Values.cloudSql.connectionName | quote }}
+
           resources:
             requests:
               cpu: 50m
@@ -60,15 +68,19 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
-              drop: ["ALL"]
+              drop:
+                - ALL
         {{- end }}
 
       volumes:
-        - { name: tmp, emptyDir: {} }
+        - name: tmp
+          emptyDir: {}
+
 {{- end }}
