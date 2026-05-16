@@ -56,13 +56,18 @@ spec:
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
 
+          # 💡 修改點 1：拿掉報錯的 --token-path，只留下 Proxy 支援的標準參數
           args:
             - "--private-ip"
             - "--port=3306"
             - "--auto-iam-authn"
-            - "--token-path=/var/run/secrets/tokens/gcp-ksa/token"
             - "--quitquitquit"
             - {{ .Values.cloudSql.connectionName | quote }}
+
+          # 💡 修改點 2：加入這個 env 設定，強迫 Proxy 的 Google SDK 認得這個託管 Token 檔案
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/tokens/gcp-ksa/token
 
           resources:
             requests:
@@ -87,7 +92,6 @@ spec:
               readOnly: true
         {{- end }}
 
-      # 這裡成功將兩個 volume 併入同一個陣列，完全解決縮排與重複宣告問題
       volumes:
         - name: tmp
           emptyDir: {}
