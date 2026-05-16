@@ -25,7 +25,6 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "lims.serviceAccountName" . }}
-      automountServiceAccountToken: true
       securityContext: {{- include "lims.podSecurityContext" . | nindent 8 }}
 
       containers:
@@ -56,12 +55,9 @@ spec:
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
 
-          # 💡 終極修正：只留下 --private-ip、--port、--auto-iam-authn 與 --quitquitquit
-          # 讓 Proxy 自己用 GKE 的 ADC 認證連進 Cloud SQL
           args:
             - "--private-ip"
             - "--port=3306"
-            - "--auto-iam-authn"
             - "--quitquitquit"
             - {{ .Values.cloudSql.connectionName | quote }}
 
@@ -86,4 +82,5 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+
 {{- end }}
