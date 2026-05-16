@@ -34,7 +34,7 @@ backend:
     targetCPUUtilizationPercentage: 70
   pdb:
     minAvailable: 1
-  gunicornWorkers: 4
+  gunicornWorkers: 1
 
 # ── Frontend Deployment ───────────────────────────────────────────────────
 frontend:
