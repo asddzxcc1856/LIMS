@@ -59,6 +59,7 @@ spec:
             - "--private-ip"
             - "--port=3306"
             - "--quitquitquit"
+            - "--credentials-file=/secrets/credentials.json"
             - {{ .Values.cloudSql.connectionName | quote }}
 
           resources:
@@ -77,10 +78,19 @@ spec:
             capabilities:
               drop:
                 - ALL
+
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets
+              readOnly: true
         {{- end }}
 
       volumes:
         - name: tmp
           emptyDir: {}
+
+        - name: cloudsql-instance-credentials
+          secret:
+            secretName: cloudsql-instance-credentials
 
 {{- end }}
