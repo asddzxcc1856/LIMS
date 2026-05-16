@@ -35,18 +35,31 @@ spec:
           # the ConfigMap, which already branches on cloudSql.enabled
           # (Auth Proxy sidecar → 127.0.0.1, in-cluster MySQL → service name).
           resources: {{- toYaml .Values.backend.resources | nindent 12 }}
+
           startupProbe:
-            httpGet: { path: /healthz, port: http }
+            httpGet:
+              scheme: HTTP
+              path: /healthz
+              port: http
             periodSeconds: 5
             failureThreshold: 30
+
           livenessProbe:
-            httpGet: { path: /healthz, port: http }
+            httpGet:
+              scheme: HTTP
+              path: /healthz
+              port: http
             periodSeconds: 30
             failureThreshold: 5
+
           readinessProbe:
-            httpGet: { path: /readyz, port: http }
+            httpGet:
+              scheme: HTTP
+              path: /readyz
+              port: http
             periodSeconds: 10
             failureThreshold: 3
+
           lifecycle:
             preStop:
               exec: { command: ["/bin/sh", "-c", "sleep 5"] }   # let LB drop us before SIGTERM
