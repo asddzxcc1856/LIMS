@@ -43,7 +43,7 @@ spec:
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
           # --quitquitquit lets the sidecar exit when the migration container does
-          args: ["--private-ip", "--port=3306",
+          args: ["--private-ip", "--port=3306", "--quitquitquit",
                  {{ .Values.cloudSql.connectionName | quote }}]
           resources:
             requests: { cpu: 50m, memory: 64Mi }
