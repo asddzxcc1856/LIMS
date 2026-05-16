@@ -56,14 +56,12 @@ spec:
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
 
-          # 💡 核心修改點：
-          # 1. 拿掉所有自訂 token 參數
-          # 2. 加上 --gcloud-auth，這會強迫 Proxy 改走 GKE Metadata Server 機制取得 Workload Identity 憑證
+          # 💡 終極修正：只留下 --private-ip、--port、--auto-iam-authn 與 --quitquitquit
+          # 讓 Proxy 自己用 GKE 的 ADC 認證連進 Cloud SQL
           args:
             - "--private-ip"
             - "--port=3306"
             - "--auto-iam-authn"
-            - "--gcloud-auth"
             - "--quitquitquit"
             - {{ .Values.cloudSql.connectionName | quote }}
 
@@ -85,7 +83,6 @@ spec:
                 - ALL
         {{- end }}
 
-      # 💡 核心修改點：清空所有手動投影的 volume，回復最乾淨的狀態，讓 GKE Autopilot 自己處理
       volumes:
         - name: tmp
           emptyDir: {}
