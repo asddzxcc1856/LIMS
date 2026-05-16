@@ -37,7 +37,11 @@ if not DEBUG and SECRET_KEY == DEV_FALLBACK_SECRET:
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
-
+if PRODUCTION:
+    raise RuntimeError(
+        'DJANGO_ALLOWED_HOSTS must be set to a comma-separated host list when '
+        'DJANGO_PRODUCTION=True (wildcard "*" is rejected).'
+    )
 
 # CSRF_TRUSTED_ORIGINS is required by Django 4+ when the SPA is on a different
 # scheme/host from the backend (typical: SPA on https://lims.example.com, API
@@ -250,6 +254,10 @@ SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 if PRODUCTION:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
+     SECURE_REDIRECT_EXEMPT = [
+        r"^healthz$",
+        r"^readyz$",
+    ]
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30        # 30 days; raise after stable
