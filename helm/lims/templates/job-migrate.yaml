@@ -29,7 +29,12 @@ spec:
       containers:
         - name: migrate
           image: {{ include "lims.image.backend" . | quote }}
-          command: ["python", "manage.py", "migrate", "--noinput"]
+          command:
+	  - /bin/sh
+	  - -c
+	  - |
+	    python manage.py migrate --noinput
+	    pkill cloud-sql-proxy || true
           envFrom:
             - configMapRef: { name: {{ include "lims.fullname" . }}-config }
             # The Secret is created either by ExternalSecret (prod) or
@@ -43,7 +48,7 @@ spec:
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
           # --quitquitquit lets the sidecar exit when the migration container does
-          args: ["--private-ip", "--port=3306", "--quitquitquit",
+          args: ["--private-ip", "--port=3306",
                  {{ .Values.cloudSql.connectionName | quote }}]
           resources:
             requests: { cpu: 50m, memory: 64Mi }
