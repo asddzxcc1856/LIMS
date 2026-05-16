@@ -92,7 +92,7 @@ externalSecrets:
     - DB_PASSWORD
     - LIMS_ADMIN_PASSWORD
     - SENTRY_DSN
-    - REDIS_URL                     # full URL (auth + host:port) from terraform output
+    - REDIS_AUTH                     # full URL (auth + host:port) from terraform output
 
 # ── Observability — managed by GCP, not self-hosted ─────────────────────
 # GKE Managed Prometheus scrapes /metrics; Cloud Logging captures stdout;
