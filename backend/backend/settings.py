@@ -37,7 +37,7 @@ if not DEBUG and SECRET_KEY == DEV_FALLBACK_SECRET:
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
-if PRODUCTION and ALLOWED_HOSTS == ['*']:
+if PRODUCTION:
     raise RuntimeError(
         'DJANGO_ALLOWED_HOSTS must be set to a comma-separated host list when '
         'DJANGO_PRODUCTION=True (wildcard "*" is rejected).'
