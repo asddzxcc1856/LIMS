@@ -39,11 +39,14 @@ def readyz(_request):
     try:
         import redis
 
+        import ssl
+
         redis_client = redis.Redis.from_url(
             settings.REDIS_URL,
             socket_connect_timeout=2,
             socket_timeout=2,
             retry_on_timeout=False,
+            ssl_cert_reqs=ssl.CERT_NONE,
         )
         redis_client.set('readyz-probe', '1', ex=5)
         if redis_client.get('readyz-probe') != b'1':

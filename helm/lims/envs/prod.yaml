@@ -13,7 +13,7 @@
 # docs/07-DEMO-COST-OPTIMIZATION.md to scale up.
 env: prod
 image:
-  repository: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend
+  registry: asia-east1-docker.pkg.dev/tsmc-lims/lims
   tag: latest
 ingress:
   host: lims-jack.duckdns.org
@@ -33,7 +33,7 @@ backend:
 # ── Frontend ─────────────────────────────────────────────────────────────
 frontend:
   image:
-    repository: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend
+    repository: frontend
     tag: latest
   replicas: 1
   resources:
