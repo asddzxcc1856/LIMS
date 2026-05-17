@@ -60,9 +60,12 @@ spec:
       ports:
         - { port: 53, protocol: UDP }
         - { port: 53, protocol: TCP }
-    # Memorystore (private IP, configurable per-env)
+    # Memorystore (private IP, configurable per-env).
+    # GCP Memorystore can use either 6378 or 6379 depending on the allocation.
     - to: [{ ipBlock: { cidr: 10.0.0.0/8 } }]
-      ports: [{ port: 6379, protocol: TCP }]
+      ports:
+        - { port: 6378, protocol: TCP }
+        - { port: 6379, protocol: TCP }
     # private.googleapis.com VIP for Secret Manager etc.
     - to: [{ ipBlock: { cidr: 199.36.153.4/30 } }]
       ports: [{ port: 443, protocol: TCP }]

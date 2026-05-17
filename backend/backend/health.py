@@ -12,6 +12,7 @@ Two endpoints, intentionally cheap and unauthenticated:
 These are mounted at the root of the URL tree (not under ``/api``) so an
 ingress / probe doesn't need to know about app prefixes.
 """
+from django.conf import settings
 from django.db import connection
 from django.http import JsonResponse
 
@@ -36,9 +37,16 @@ def readyz(_request):
         overall_ok = False
 
     try:
-        from django.core.cache import cache
-        cache.set('readyz-probe', '1', timeout=5)
-        if cache.get('readyz-probe') != '1':
+        import redis
+
+        redis_client = redis.Redis.from_url(
+            settings.REDIS_URL,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=False,
+        )
+        redis_client.set('readyz-probe', '1', ex=5)
+        if redis_client.get('readyz-probe') != b'1':
             raise RuntimeError('redis round-trip mismatch')
         checks['redis'] = 'ok'
     except Exception as exc:
