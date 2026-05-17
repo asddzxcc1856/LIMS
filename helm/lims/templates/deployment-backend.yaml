@@ -26,6 +26,22 @@ spec:
         - name: app
           image: {{ include "lims.image.backend" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - gunicorn
+          args:
+            - backend.wsgi:application
+            - --bind
+            - 0.0.0.0:8000
+            - --workers
+            - {{ .Values.backend.gunicornWorkers | quote }}
+            - --timeout
+            - "120"
+            - --graceful-timeout
+            - "25"
+            - --access-logfile
+            - "-"
+            - --error-logfile
+            - "-"
           ports:
             - { name: http, containerPort: 8000 }
           envFrom:
