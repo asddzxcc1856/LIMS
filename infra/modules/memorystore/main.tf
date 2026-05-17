@@ -39,7 +39,8 @@ resource "google_secret_manager_secret_version" "redis_auth" {
 
 # Helm consumes redis.url as a single string; assemble it here.
 locals {
-  redis_url = "redis://:${google_redis_instance.redis.auth_string}@${google_redis_instance.redis.host}:${google_redis_instance.redis.port}/0"
+  # Transit encryption is enabled, so the application needs a TLS-enabled Redis URL.
+  redis_url = "rediss://:${google_redis_instance.redis.auth_string}@${google_redis_instance.redis.host}:${google_redis_instance.redis.port}/0"
 }
 
 output "host" { value = google_redis_instance.redis.host }
