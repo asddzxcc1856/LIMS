@@ -39,7 +39,7 @@ spec:
           startupProbe:
             httpGet:
               scheme: HTTP
-              path: /healthz
+              path: /health
               port: http
             periodSeconds: 5
             failureThreshold: 30
@@ -74,6 +74,7 @@ spec:
             - "--private-ip"
             - "--port=3306"
             - "--health-check"
+            - "--credentials-file=/secrets/credentials.json"
             - {{ .Values.cloudSql.connectionName | quote }}
           resources:
             requests: { cpu: 50m, memory: 64Mi }
@@ -85,8 +86,15 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
 
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets
+              readOnly: true
         {{- end }}
 
       volumes:
         - { name: tmp, emptyDir: {} }
 
+        - name: cloudsql-instance-credentials
+          secret:
+            secretName: cloudsql-instance-credentials
