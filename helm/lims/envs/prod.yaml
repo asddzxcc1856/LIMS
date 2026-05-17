@@ -28,7 +28,7 @@ backend:
     limits:   { cpu: "1",  memory: 1Gi   }
   hpa: { enabled: true, min: 1, max: 2, targetCPUUtilizationPercentage: 75 }
   pdb: { minAvailable: 0 }      # 1 replica → can't keep min 1 during voluntary disruption
-  gunicornWorkers: 3
+  gunicornWorkers: 1
 
 # ── Frontend ─────────────────────────────────────────────────────────────
 frontend:
