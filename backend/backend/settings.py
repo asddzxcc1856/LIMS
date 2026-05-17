@@ -12,7 +12,7 @@ import logging
 import os
 from datetime import timedelta
 from pathlib import Path
-
+import ssl
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ---------------------------------------------------------------------------
@@ -187,6 +187,9 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'ssl_cert_reqs': ssl.CERT_NONE,
+        },
     }
 }
 
