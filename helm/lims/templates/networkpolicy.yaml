@@ -71,5 +71,5 @@ spec:
 
     # Cloud SQL backend (proxy → instance)
     - to: [{ ipBlock: { cidr: 10.0.0.0/8 } }]
-      ports: [{ port: 3306, protocol: TCP }]
+      ports: [{ port: 3307, protocol: TCP }]
 {{- end }}
