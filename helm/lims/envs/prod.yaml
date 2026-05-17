@@ -16,7 +16,7 @@ image:
   repository: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend
   tag: latest
 ingress:
-  host: lims.ddns.net
+  host: lims-jack.duckdns.org
   staticIp: lims-prod-ingress-ip
 
 # ── Backend ──────────────────────────────────────────────────────────────
@@ -79,8 +79,8 @@ config:
   DJANGO_DEBUG: "False"
   DJANGO_PRODUCTION: "True"
   DJANGO_ALLOWED_HOSTS: "*"
-  CORS_ALLOWED_ORIGINS: https://lims.ddns.net
-  CSRF_TRUSTED_ORIGINS: https://lims.ddns.net
+  CORS_ALLOWED_ORIGINS: https://lims-jack.duckdns.org
+  CSRF_TRUSTED_ORIGINS: https://lims-jack.duckdns.org
   SEED_DEMO_DATA: "True"            # demo: keep the seed accounts/lots so reviewers can log in
   DJANGO_LOG_LEVEL: INFO
   SENTRY_ENVIRONMENT: prod
