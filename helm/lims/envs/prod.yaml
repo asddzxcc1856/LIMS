@@ -1,4 +1,4 @@
-	# prod — DEMO sizing (Scenario B, ~$200/month).
+# prod — DEMO sizing (Scenario B, ~$200/month).
 #
 # DNS: lims.ddns.net A record points at the GCLB static IP reserved by
 # infra/envs/prod (output: ingress_static_ip_address). DDNS provider must
