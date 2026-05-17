@@ -138,15 +138,32 @@ echo -n "" | \
 
 **Memorystore 的 redis-auth secret 不用手建 — Terraform memorystore 模組會在建好 Redis 之後自動把 AUTH string 塞進 Secret Manager。**
 
+但目前 backend readiness 也需要完整的 `REDIS_URL` secret，名稱為 `lims-prod-redis-url`，其值應該是：
+
+```text
+redis://:<REDIS_AUTH>@<redis-host>:<redis-port>/0
+```
+
+你可以用以下方式建立：
+
+```bash
+REDIS_AUTH=$(gcloud secrets versions access latest --secret=lims-prod-redis-auth --project=$PROJECT)
+REDIS_HOST=10.194.0.3
+REDIS_PORT=6378
+printf 'redis://:%s@%s:%s/0' "$REDIS_AUTH" "$REDIS_HOST" "$REDIS_PORT" | \
+  gcloud secrets create lims-$ENV-redis-url --data-file=- --project=$PROJECT
+```
+
 確認:
 
 ```bash
-gcloud secrets list --filter="name:lims-prod-*"
-# NAME                              CREATED              REPLICATION_POLICY
-# lims-prod-django-secret-key       2026-05-10T07:50:00  automatic
-# lims-prod-db-password             2026-05-10T07:50:01  automatic
-# lims-prod-lims-admin-password     2026-05-10T07:50:02  automatic
-# lims-prod-sentry-dsn              2026-05-10T07:50:03  automatic
+gcloud secrets list --project=$PROJECT --format='value(name)' | grep '^lims-prod-'
+# lims-prod-db-password
+# lims-prod-django-secret-key
+# lims-prod-lims-admin-password
+# lims-prod-redis-auth
+# lims-prod-redis-url
+# lims-prod-sentry-dsn
 ```
 
 > ⚠️ `lims-prod-lims-admin-password` 的初始值你 **必須** 在第一次部署完之後立刻換掉,因為 migration 會用這個 build 出超管帳號。建議流程:

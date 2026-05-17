@@ -99,6 +99,7 @@ externalSecrets:
     - DB_PASSWORD
     - LIMS_ADMIN_PASSWORD
     - SENTRY_DSN
+    - REDIS_URL
 
 # Local-only fallback Secret. Used ONLY when externalSecrets.enabled is
 # false (i.e. kind / local validation). Never override these to real
