@@ -57,7 +57,7 @@ spec:
               scheme: HTTP
               path: /healthz
               port: http
-            timeoutSeconds: 5
+            timeoutSeconds: 15
             periodSeconds: 5
             failureThreshold: 30
 
@@ -66,7 +66,7 @@ spec:
               scheme: HTTP
               path: /healthz
               port: http
-            timeoutSeconds: 3
+            timeoutSeconds: 15
             periodSeconds: 30
             failureThreshold: 5
 
@@ -75,7 +75,7 @@ spec:
               scheme: HTTP
               path: /readyz
               port: http
-            timeoutSeconds: 3
+            timeoutSeconds: 15
             periodSeconds: 10
             failureThreshold: 3
 
