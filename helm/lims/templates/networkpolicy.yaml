@@ -66,7 +66,7 @@ spec:
         - { port: 6379, protocol: TCP }
 
     # private.googleapis.com VIP for Secret Manager etc.
-    - to: [{ ipBlock: { cidr: 199.36.153.4/30 } }]
+    - to: [{ ipBlock: { cidr: 0.0.0.0/0 } }]
       ports: [{ port: 443, protocol: TCP }]
 
     # Cloud SQL backend (proxy → instance)
