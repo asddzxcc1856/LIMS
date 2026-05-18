@@ -13,6 +13,8 @@ spec:
   template:
     metadata:
       labels: {{- include "lims.componentLabels" (dict "root" . "component" "frontend") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "lims.configHash" . }}
     spec:
       terminationGracePeriodSeconds: 30
       securityContext: {{- include "lims.podSecurityContext" . | nindent 8 }}
