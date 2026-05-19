@@ -15,7 +15,7 @@ from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
 from equipments.models import Equipment, ExperimentRequiredEquipment
-from scheduling.models import EquipmentBooking
+from scheduling.models import EquipmentBooking, StageEvent
 
 
 def _get_conflicting_equipment_ids(start, end):
@@ -182,3 +182,36 @@ def allocate_equipments_for_stage(stage, equipment_id=None):
         eq.save(update_fields=['status'])
 
     return booking
+
+
+def record_stage_event(
+    stage,
+    *,
+    event_type,
+    operator=None,
+    notes='',
+    measurement=None,
+):
+    """Append a ``StageEvent`` row.
+
+    The event captures who did what on which equipment with which recipe.
+    Used by the load / unload buttons in the lab member UI and by the
+    ``complete_stage`` flow to leave an automatic UNLOAD breadcrumb.
+
+    Validation is intentionally light here — the model is an append-only
+    audit log; richer guards (permission, sequence rules) live one layer
+    up at the view level.
+    """
+    valid = {choice for choice, _ in StageEvent.EventType.choices}
+    if event_type not in valid:
+        raise ValidationError(f'Unknown event_type "{event_type}".')
+
+    return StageEvent.objects.create(
+        stage=stage,
+        equipment=stage.equipment,
+        recipe=stage.recipe,
+        event_type=event_type,
+        operator=operator,
+        notes=notes or '',
+        measurement=measurement or {},
+    )

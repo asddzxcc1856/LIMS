@@ -125,3 +125,53 @@ input:-webkit-autofill:active {
   caret-color: var(--c-text);
   transition: background-color 600000s ease-in-out 0s;
 }
+
+/* ─── RWD hardening ───────────────────────────────────────────────────────
+ * Phones (≤575px) get global safety nets so any page that didn't apply
+ * component-level responsive props still degrades gracefully:
+ *   - antd modals fall back to ~95% viewport width
+ *   - antd drawers fall back to ~95% viewport width
+ *   - antd PageHeader extra-actions row wraps instead of overflowing
+ *   - tables get a horizontal scrollbar inside their wrapper
+ * Stays inline with antd's class names so we don't fight the framework. */
+@media (max-width: 767px) {
+  .ant-modal {
+    max-width: 95vw !important;
+    margin: 8px auto !important;
+  }
+  .ant-drawer-content-wrapper {
+    max-width: 95vw !important;
+  }
+  .ant-page-header-heading {
+    flex-wrap: wrap;
+  }
+  .ant-page-header-heading-extra {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .ant-card {
+    border-radius: 6px;
+  }
+  /* Wrap dense statistic groups */
+  .ant-statistic {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 575px) {
+  /* Reduce default antd container padding on phones */
+  .ant-card-body {
+    padding: 12px !important;
+  }
+  .ant-modal-body {
+    padding: 16px !important;
+  }
+  .ant-form-vertical .ant-form-item {
+    margin-bottom: 12px;
+  }
+  /* Allow page sections to breathe */
+  body {
+    font-size: 14px;
+  }
+}

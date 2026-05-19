@@ -2,7 +2,7 @@
 scheduling/serializers.py
 """
 from rest_framework import serializers
-from .models import EquipmentBooking
+from .models import EquipmentBooking, StageEvent
 
 
 class EquipmentBookingSerializer(serializers.ModelSerializer):
@@ -24,6 +24,31 @@ class EquipmentBookingSerializer(serializers.ModelSerializer):
             'started_at', 'ended_at',
         ]
 
+
+
+class StageEventSerializer(serializers.ModelSerializer):
+    equipment_code = serializers.CharField(source='equipment.code', read_only=True, default=None)
+    recipe_name = serializers.CharField(source='recipe.name', read_only=True, default=None)
+    recipe_version = serializers.IntegerField(source='recipe.version', read_only=True, default=None)
+    operator_username = serializers.CharField(
+        source='operator.username', read_only=True, default=None,
+    )
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+
+    class Meta:
+        model = StageEvent
+        fields = [
+            'id', 'stage', 'event_type', 'event_type_display',
+            'equipment', 'equipment_code',
+            'recipe', 'recipe_name', 'recipe_version',
+            'operator', 'operator_username',
+            'occurred_at', 'notes', 'measurement',
+        ]
+        read_only_fields = [
+            'id', 'stage', 'equipment', 'recipe', 'operator', 'occurred_at',
+            'equipment_code', 'recipe_name', 'recipe_version', 'operator_username',
+            'event_type_display',
+        ]
 
 
 class AvailabilityQuerySerializer(serializers.Serializer):

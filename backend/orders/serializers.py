@@ -3,7 +3,7 @@ orders/serializers.py
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Order, OrderStage
+from .models import Approval, Order, OrderStage, Sample
 
 User = get_user_model()
 
@@ -12,6 +12,12 @@ class OrderStageSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(source='department.name', read_only=True)
     assignee_name = serializers.CharField(source='assignee.username', read_only=True)
     equipment_code = serializers.CharField(source='equipment.code', read_only=True)
+    recipe_name = serializers.CharField(source='recipe.name', read_only=True, default=None)
+    recipe_version = serializers.IntegerField(source='recipe.version', read_only=True, default=None)
+    recipe_parameters = serializers.JSONField(source='recipe.parameters', read_only=True, default=None)
+    received_by_username = serializers.CharField(
+        source='received_by.username', read_only=True, default=None,
+    )
 
     # Metadata from parent order — the manager uses experiment_name as the
     # recipe context when scheduling. equipment_type_name is kept for legacy
@@ -28,8 +34,10 @@ class OrderStageSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderStage
         fields = [
-            'id', 'step_order', 'department_name',
+            'id', 'order', 'step_order', 'department_name',
             'status', 'assignee', 'assignee_name', 'equipment', 'equipment_code',
+            'recipe', 'recipe_name', 'recipe_version', 'recipe_parameters',
+            'received_at', 'received_by', 'received_by_username',
             'order_no', 'user_name', 'lot_id',
             'experiment_name', 'is_urgent', 'requirements', 'remark', 'equipment_type_name',
             'schedule_start', 'schedule_end', 'completed_at',
@@ -109,6 +117,45 @@ class OrderCreateSerializer(serializers.Serializer):
     lot_id = serializers.CharField(max_length=50)
     requirements = serializers.CharField(required=False, default='', allow_blank=True)
     remark = serializers.CharField(required=False, default='', allow_blank=True)
+
+
+class ApprovalSerializer(serializers.ModelSerializer):
+    """Audit row written by every manager decision on a stage."""
+
+    actor_username = serializers.CharField(source='actor.username', read_only=True, default=None)
+    decision_display = serializers.CharField(source='get_decision_display', read_only=True)
+    order_no = serializers.CharField(source='stage.order.order_no', read_only=True)
+    step_order = serializers.IntegerField(source='stage.step_order', read_only=True)
+
+    class Meta:
+        model = Approval
+        fields = [
+            'id', 'stage', 'order_no', 'step_order',
+            'actor', 'actor_username',
+            'decision', 'decision_display',
+            'comment', 'decided_at',
+        ]
+        read_only_fields = ['id', 'actor', 'decided_at']
+
+
+class SampleSerializer(serializers.ModelSerializer):
+    """Sample row — used by /samples/ endpoints and admin CRUD."""
+
+    full_code = serializers.CharField(read_only=True)
+    order_no = serializers.CharField(source='order.order_no', read_only=True)
+    created_by_username = serializers.CharField(
+        source='created_by.username', read_only=True, default=None,
+    )
+
+    class Meta:
+        model = Sample
+        fields = [
+            'id', 'order', 'order_no',
+            'sub_code', 'full_code', 'wafer_count', 'notes',
+            'parent_sample',
+            'created_at', 'created_by', 'created_by_username',
+        ]
+        read_only_fields = ['id', 'created_at', 'created_by']
 
 
 class OrderReviewSerializer(serializers.Serializer):

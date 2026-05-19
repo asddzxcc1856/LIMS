@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Experiment, EquipmentType, Equipment, ExperimentRequiredEquipment
+from .models import (
+    Equipment,
+    EquipmentType,
+    Experiment,
+    ExperimentRequiredEquipment,
+    Recipe,
+)
 
 
 @admin.register(Experiment)
@@ -21,3 +27,10 @@ class EquipmentAdmin(admin.ModelAdmin):
 @admin.register(ExperimentRequiredEquipment)
 class ExperimentRequiredEquipmentAdmin(admin.ModelAdmin):
     list_display = ['experiment', 'equipment_type', 'quantity']
+
+
+@admin.register(Recipe)
+class RecipeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'equipment_type', 'version', 'is_active', 'updated_at']
+    list_filter = ['equipment_type', 'is_active']
+    search_fields = ['name', 'equipment_type__name']

@@ -13,6 +13,7 @@ from equipments.models import (
     EquipmentType,
     Experiment,
     ExperimentRequiredEquipment,
+    Recipe,
 )
 from orders.models import Order, OrderStage
 from scheduling.models import EquipmentBooking
@@ -124,6 +125,17 @@ class ExperimentFactory(DjangoModelFactory):
             step_order=step_order,
         )
         return exp
+
+
+class RecipeFactory(DjangoModelFactory):
+    class Meta:
+        model = Recipe
+
+    name = factory.Sequence(lambda n: f'Recipe-{n:03d}')
+    equipment_type = factory.SubFactory(EquipmentTypeFactory)
+    version = 1
+    parameters = factory.LazyFunction(lambda: {'temp': 250, 'time_sec': 600})
+    is_active = True
 
 
 class ExperimentRequiredEquipmentFactory(DjangoModelFactory):

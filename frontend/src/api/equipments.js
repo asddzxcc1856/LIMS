@@ -10,3 +10,11 @@ export const fetchEquipments = (params) => client.get('/equipments/', { params }
 export const fetchStatusMatrix = () => client.get('/equipments/status-matrix/')
 export const fetchCapacityCheck = (experimentId) =>
   client.get('/equipments/capacity-check/', { params: { experiment_id: experimentId } })
+
+/**
+ * Recipe list — scoped to the caller's lab (managers/members see their lab's
+ * equipment_type recipes; requesters get [] by design).
+ * @param {Object} params - { equipment_type, is_active }
+ */
+export const fetchRecipes = (params = {}) =>
+  client.get('/equipments/recipes/', { params })
