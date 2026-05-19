@@ -2,7 +2,13 @@
 equipments/serializers.py
 """
 from rest_framework import serializers
-from .models import Experiment, EquipmentType, Equipment, ExperimentRequiredEquipment
+from .models import (
+    Equipment,
+    EquipmentType,
+    Experiment,
+    ExperimentRequiredEquipment,
+    Recipe,
+)
 
 
 class EquipmentTypeSerializer(serializers.ModelSerializer):
@@ -43,3 +49,15 @@ class ExperimentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Experiment
         fields = ['id', 'name', 'remark', 'department', 'department_name']
+
+
+class RecipeSerializer(serializers.ModelSerializer):
+    equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
+
+    class Meta:
+        model = Recipe
+        fields = [
+            'id', 'name', 'version', 'parameters', 'remark',
+            'is_active',
+            'equipment_type', 'equipment_type_name',
+        ]

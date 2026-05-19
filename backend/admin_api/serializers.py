@@ -11,9 +11,11 @@ from equipments.models import (
     EquipmentType,
     Experiment,
     ExperimentRequiredEquipment,
+    Recipe,
 )
-from orders.models import Order, OrderStage
-from scheduling.models import EquipmentBooking
+from monitoring.models import Notification
+from orders.models import Approval, Order, OrderStage, Sample
+from scheduling.models import EquipmentBooking, StageEvent
 from users.models import FAB, Department, User, WaferLot
 
 
@@ -147,6 +149,36 @@ class EquipmentSerializer(serializers.ModelSerializer):
         )
 
 
+class RecipeSerializer(serializers.ModelSerializer):
+    equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
+    created_by_username = serializers.CharField(
+        source='created_by.username', read_only=True, default=None,
+    )
+
+    class Meta:
+        model = Recipe
+        fields = (
+            'id', 'name', 'version', 'parameters', 'remark', 'is_active',
+            'equipment_type', 'equipment_type_name',
+            'created_by', 'created_by_username',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at', 'created_by')
+
+    def validate_parameters(self, value):
+        if value in (None, ''):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('parameters must be an object.')
+        return value
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        return super().create(validated_data)
+
+
 class ExperimentRequiredEquipmentSerializer(serializers.ModelSerializer):
     experiment_name = serializers.CharField(source='experiment.name', read_only=True)
     equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
@@ -191,6 +223,11 @@ class OrderStageSerializer(serializers.ModelSerializer):
     equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
     equipment_code = serializers.CharField(source='equipment.code', read_only=True, default=None)
     assignee_username = serializers.CharField(source='assignee.username', read_only=True, default=None)
+    recipe_name = serializers.CharField(source='recipe.name', read_only=True, default=None)
+    recipe_version = serializers.IntegerField(source='recipe.version', read_only=True, default=None)
+    received_by_username = serializers.CharField(
+        source='received_by.username', read_only=True, default=None,
+    )
 
     class Meta:
         model = OrderStage
@@ -200,10 +237,98 @@ class OrderStageSerializer(serializers.ModelSerializer):
             'equipment_type', 'equipment_type_name',
             'assignee', 'assignee_username',
             'equipment', 'equipment_code',
+            'recipe', 'recipe_name', 'recipe_version',
+            'received_at', 'received_by', 'received_by_username',
             'status',
             'schedule_start', 'schedule_end', 'completed_at',
         )
         read_only_fields = ('id',)
+
+
+class SampleAdminSerializer(serializers.ModelSerializer):
+    order_no = serializers.CharField(source='order.order_no', read_only=True)
+    full_code = serializers.CharField(read_only=True)
+    created_by_username = serializers.CharField(
+        source='created_by.username', read_only=True, default=None,
+    )
+
+    class Meta:
+        model = Sample
+        fields = (
+            'id', 'order', 'order_no',
+            'sub_code', 'full_code', 'wafer_count', 'notes',
+            'parent_sample',
+            'created_at', 'created_by', 'created_by_username',
+        )
+        read_only_fields = ('id', 'created_at')
+
+
+class NotificationAdminSerializer(serializers.ModelSerializer):
+    """Admin-facing view over Notification rows for audit/troubleshooting."""
+
+    recipient_username = serializers.CharField(
+        source='recipient.username', read_only=True,
+    )
+    level_display = serializers.CharField(source='get_level_display', read_only=True)
+    kind_display = serializers.CharField(source='get_kind_display', read_only=True)
+    related_order_no = serializers.CharField(
+        source='related_order.order_no', read_only=True, default=None,
+    )
+
+    class Meta:
+        model = Notification
+        fields = (
+            'id',
+            'recipient', 'recipient_username',
+            'level', 'level_display',
+            'kind', 'kind_display',
+            'title', 'body',
+            'related_order', 'related_order_no',
+            'related_stage', 'related_equipment',
+            'is_read', 'created_at', 'read_at',
+        )
+        read_only_fields = ('id', 'created_at', 'read_at')
+
+
+class ApprovalAdminSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True, default=None)
+    decision_display = serializers.CharField(source='get_decision_display', read_only=True)
+    stage_order_no = serializers.CharField(source='stage.order.order_no', read_only=True)
+
+    class Meta:
+        model = Approval
+        fields = (
+            'id', 'stage', 'stage_order_no',
+            'actor', 'actor_username',
+            'decision', 'decision_display',
+            'comment', 'decided_at',
+        )
+        read_only_fields = ('id', 'decided_at')
+
+
+class StageEventSerializer(serializers.ModelSerializer):
+    """Admin view of the per-stage audit log (above the user-facing one,
+    which lives in :mod:`scheduling.serializers`)."""
+
+    stage_order_no = serializers.CharField(source='stage.order.order_no', read_only=True)
+    equipment_code = serializers.CharField(source='equipment.code', read_only=True, default=None)
+    recipe_name = serializers.CharField(source='recipe.name', read_only=True, default=None)
+    operator_username = serializers.CharField(
+        source='operator.username', read_only=True, default=None,
+    )
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+
+    class Meta:
+        model = StageEvent
+        fields = (
+            'id', 'stage', 'stage_order_no',
+            'event_type', 'event_type_display',
+            'equipment', 'equipment_code',
+            'recipe', 'recipe_name',
+            'operator', 'operator_username',
+            'occurred_at', 'notes', 'measurement',
+        )
+        read_only_fields = ('id', 'occurred_at')
 
 
 class EquipmentBookingSerializer(serializers.ModelSerializer):

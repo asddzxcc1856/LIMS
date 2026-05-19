@@ -16,10 +16,12 @@ from equipments.models import (
     EquipmentType,
     Experiment,
     ExperimentRequiredEquipment,
+    Recipe,
 )
+from monitoring.models import Notification
 from monitoring.permissions import IsSystemSuperuser
-from orders.models import Order, OrderStage
-from scheduling.models import EquipmentBooking
+from orders.models import Approval, Order, OrderStage, Sample
+from scheduling.models import EquipmentBooking, StageEvent
 from users.models import FAB, Department, User, WaferLot
 
 from . import serializers as admin_serializers
@@ -242,6 +244,17 @@ class EquipmentViewSet(AdminBaseViewSet):
     ordering_fields = ('code', 'status')
 
 
+class RecipeViewSet(AdminBaseViewSet):
+    queryset = (
+        Recipe.objects
+        .select_related('equipment_type', 'created_by')
+        .order_by('equipment_type__name', 'name', '-version')
+    )
+    serializer_class = admin_serializers.RecipeSerializer
+    search_fields = ('name', 'equipment_type__name', 'remark')
+    ordering_fields = ('name', 'version', 'updated_at', 'is_active')
+
+
 class ExperimentRequiredEquipmentViewSet(AdminBaseViewSet):
     queryset = (
         ExperimentRequiredEquipment.objects
@@ -273,6 +286,55 @@ class OrderStageViewSet(AdminBaseViewSet):
     serializer_class = admin_serializers.OrderStageSerializer
     search_fields = ('order__order_no',)
     ordering_fields = ('step_order', 'status')
+
+
+class SampleViewSet(AdminBaseViewSet):
+    queryset = (
+        Sample.objects
+        .select_related('order', 'created_by', 'parent_sample')
+        .order_by('-created_at')
+    )
+    serializer_class = admin_serializers.SampleAdminSerializer
+    search_fields = ('sub_code', 'order__order_no', 'notes')
+    ordering_fields = ('created_at', 'sub_code', 'wafer_count')
+
+
+class NotificationViewSet(AdminBaseViewSet):
+    queryset = (
+        Notification.objects
+        .select_related('recipient', 'related_order', 'related_equipment')
+        .order_by('-created_at')
+    )
+    serializer_class = admin_serializers.NotificationAdminSerializer
+    search_fields = ('title', 'body', 'recipient__username', 'kind')
+    ordering_fields = ('created_at', 'is_read', 'level')
+
+
+class ApprovalViewSet(AdminBaseViewSet):
+    queryset = (
+        Approval.objects
+        .select_related('stage__order', 'actor')
+        .order_by('-decided_at')
+    )
+    serializer_class = admin_serializers.ApprovalAdminSerializer
+    search_fields = (
+        'stage__order__order_no', 'actor__username', 'comment', 'decision',
+    )
+    ordering_fields = ('decided_at', 'decision')
+
+
+class StageEventViewSet(AdminBaseViewSet):
+    queryset = (
+        StageEvent.objects
+        .select_related('stage__order', 'equipment', 'recipe', 'operator')
+        .order_by('-occurred_at')
+    )
+    serializer_class = admin_serializers.StageEventSerializer
+    search_fields = (
+        'stage__order__order_no', 'equipment__code', 'recipe__name',
+        'operator__username', 'event_type',
+    )
+    ordering_fields = ('occurred_at', 'event_type')
 
 
 class EquipmentBookingViewSet(AdminBaseViewSet):

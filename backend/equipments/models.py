@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.db import models
 
 
@@ -72,6 +73,52 @@ class Equipment(models.Model):
 
     def __str__(self):
         return f'{self.equipment_type.name} – {self.code}'
+
+
+class Recipe(models.Model):
+    """Recipe = a named set of equipment parameters used during an experiment.
+
+    Recipes are pinned to an ``EquipmentType`` (e.g. "SEM"), not to a single
+    machine, so the same parameter set can be applied on any unit of that
+    type. The actual parameters live in ``parameters`` as a JSON blob — the
+    catalogue stays open-ended because each equipment family has its own
+    knobs (temperature, time, gas flow, kV, etc.).
+
+    ``version`` lets the lab evolve a recipe without overwriting history:
+    when parameters change for production safety, bump the version and
+    deactivate the older one rather than mutating it in place. Active rows
+    are surfaced in the manager dispatch UI; deactivated rows stay queryable
+    for audit but are filtered out of the picker.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120)
+    equipment_type = models.ForeignKey(
+        EquipmentType,
+        on_delete=models.PROTECT,
+        related_name='recipes',
+    )
+    version = models.PositiveIntegerField(default=1)
+    parameters = models.JSONField(default=dict, blank=True)
+    remark = models.TextField(blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recipes_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'recipe'
+        ordering = ['equipment_type__name', 'name', '-version']
+        unique_together = ('name', 'equipment_type', 'version')
+
+    def __str__(self):
+        return f'{self.name} v{self.version} ({self.equipment_type.name})'
 
 
 class ExperimentRequiredEquipment(models.Model):

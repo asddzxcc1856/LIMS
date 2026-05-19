@@ -33,6 +33,7 @@
       :loading="loading"
       :pagination="pagination"
       :row-selection="selectable ? rowSelectionConfig : undefined"
+      :scroll="{ x: tableScrollX }"
       bordered
       size="middle"
       @change="onTableChange"
@@ -78,7 +79,7 @@
       v-model:open="modalOpen"
       :title="modalTitle"
       :confirm-loading="submitting"
-      width="640px"
+      :width="modalWidth"
       :mask-closable="false"
       :ok-text="t('crud.save')"
       :cancel-text="t('crud.cancel')"
@@ -137,6 +138,9 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons-vue'
+import { useBreakpoint } from '../../composables/useBreakpoint'
+
+const { isMobile } = useBreakpoint()
 
 const { t } = useI18n()
 
@@ -211,6 +215,22 @@ const tableColumns = computed(() => [
   ...props.columns,
   { title: t('crud.actions'), dataIndex: '__actions__', width: 160, fixed: 'right' },
 ])
+
+// Sum every column's declared width so the table can scroll horizontally
+// on small screens instead of squishing or overflowing the layout.
+const tableScrollX = computed(() => {
+  const total = tableColumns.value.reduce(
+    (acc, col) => acc + (Number(col.width) || 140),
+    0,
+  )
+  // 480 is the bare-minimum scroll width — small admin tables (just a
+  // name column) shouldn't render a horizontal scrollbar on desktop.
+  return Math.max(total, 480)
+})
+
+// On phones the 640px modal is wider than the viewport and the form
+// fields end up clipped. Drop to a fluid 95% on mobile.
+const modalWidth = computed(() => (isMobile.value ? '95vw' : '640px'))
 
 const visibleFields = computed(() =>
   props.formFields.filter((f) =>
@@ -290,7 +310,9 @@ function openEdit(record) {
     if (field.writeOnly) {
       formState[field.name] = ''
     } else {
-      formState[field.name] = record[field.name] ?? defaultValueByType(field.type)
+      let value = record[field.name] ?? defaultValueByType(field.type)
+      if (typeof field.toFormValue === 'function') value = field.toFormValue(value)
+      formState[field.name] = value
     }
   }
   modalOpen.value = true
@@ -338,6 +360,7 @@ function buildPayload() {
     if (field.writeOnly && isEditing.value && (value === '' || value == null)) continue
     // Convert empty strings on optional FK selects to null for backend
     if (field.nullableEmpty && (value === '' || value == null)) value = null
+    if (typeof field.toApiValue === 'function') value = field.toApiValue(value)
     payload[field.name] = value
   }
   return payload

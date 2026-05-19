@@ -7,13 +7,16 @@
     <router-view v-if="!showAppShell" />
 
     <!-- Default authenticated shell: collapsible sider + header + content. -->
-    <a-layout v-else class="app-shell" :class="{ 'is-dark': settings.isDark }">
+    <a-layout v-else class="app-shell" :class="{ 'is-dark': settings.isDark, 'is-mobile': isMobile }">
       <a-layout-sider
         v-model:collapsed="collapsed"
         collapsible
         :width="232"
+        :collapsed-width="isMobile ? 0 : 64"
         :theme="settings.isDark ? 'dark' : 'light'"
+        :trigger="null"
         class="app-sider"
+        :class="{ 'app-sider-mobile': isMobile, 'app-sider-collapsed': collapsed }"
       >
         <div class="brand">
           <ExperimentOutlined class="brand-icon" />
@@ -28,6 +31,13 @@
         />
       </a-layout-sider>
 
+      <!-- Mobile-only backdrop that closes the sider when tapped outside. -->
+      <div
+        v-if="isMobile && !collapsed"
+        class="sider-backdrop"
+        @click="collapsed = true"
+      ></div>
+
       <a-layout>
         <a-layout-header class="app-header">
           <div class="header-left">
@@ -39,6 +49,7 @@
           </div>
 
           <div class="header-right">
+            <NotificationBell />
             <a-tooltip :title="t('settings.title')">
               <a-button type="text" @click="settingsOpen = true">
                 <template #icon><SettingOutlined /></template>
@@ -46,7 +57,7 @@
             </a-tooltip>
             <a-button v-if="auth.isSuperuser" type="primary" @click="goAdmin">
               <template #icon><ThunderboltOutlined /></template>
-              {{ t('nav.adminConsole') }}
+              <span class="admin-btn-text">{{ t('nav.adminConsole') }}</span>
             </a-button>
             <a-dropdown>
               <a-button type="text" class="user-trigger">
@@ -54,7 +65,7 @@
                   {{ avatarLetter }}
                 </a-avatar>
                 <span class="username">{{ auth.user?.username || '—' }}</span>
-                <DownOutlined />
+                <DownOutlined class="dropdown-caret" />
               </a-button>
               <template #overlay>
                 <a-menu @click="onUserMenuClick">
@@ -156,6 +167,8 @@ import {
 } from '@ant-design/icons-vue'
 import { useAuthStore } from './stores/auth'
 import { useSettingsStore } from './stores/settings'
+import { useBreakpoint } from './composables/useBreakpoint'
+import NotificationBell from './components/NotificationBell.vue'
 
 const auth = useAuthStore()
 const settings = useSettingsStore()
@@ -163,8 +176,26 @@ const route = useRoute()
 const router = useRouter()
 const { t, locale: i18nLocale } = useI18n()
 
+const { isMobile, isTablet } = useBreakpoint()
 const collapsed = ref(false)
 const settingsOpen = ref(false)
+
+// Auto-collapse sider when the viewport drops to tablet/phone width so the
+// content area gets enough room. Users can still expand manually.
+watch(
+  isTablet,
+  (small) => {
+    if (small) collapsed.value = true
+  },
+  { immediate: true },
+)
+watch(
+  isMobile,
+  (small) => {
+    if (small) collapsed.value = true
+  },
+  { immediate: true },
+)
 
 // Keep vue-i18n's active locale in lockstep with the persisted settings.
 watch(
@@ -307,7 +338,25 @@ function goAdmin() {
   top: 0;
   height: 100vh;
   box-shadow: 1px 0 4px rgba(0, 21, 41, 0.04);
-  z-index: 10;
+  z-index: 50;
+}
+
+/* Mobile: sider becomes a slide-over drawer rather than pushing content. */
+.app-sider-mobile {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  transition: transform 0.2s ease;
+}
+.app-sider-mobile.app-sider-collapsed {
+  transform: translateX(-100%);
+}
+.sider-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 40;
 }
 
 .brand {
@@ -336,24 +385,33 @@ function goAdmin() {
   border-bottom: 1px solid var(--c-border);
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.06);
   height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;        /* allow page-heading to truncate */
+  flex: 1;
 }
 
 .page-heading {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .user-trigger {
@@ -383,5 +441,55 @@ function goAdmin() {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* ── Tablet ≤ 1199px ───────────────────────────── */
+@media (max-width: 1199px) {
+  .app-header {
+    padding: 0 16px;
+  }
+  .app-content {
+    padding: 16px;
+  }
+  .header-right {
+    gap: 4px;
+  }
+  .username {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* ── Phone ≤ 767px ─────────────────────────────── */
+@media (max-width: 767px) {
+  .app-header {
+    padding: 0 12px;
+    height: 56px;
+  }
+  .app-content {
+    padding: 12px;
+    min-height: calc(100vh - 56px - 70px);
+  }
+  .page-heading {
+    font-size: 14px;
+  }
+  .header-right {
+    gap: 2px;
+  }
+  /* Hide the "Admin console" button label, keep just the icon. */
+  .admin-btn-text {
+    display: none;
+  }
+  /* Hide the avatar username text on the smallest screens — avatar stays. */
+  .username,
+  .dropdown-caret {
+    display: none;
+  }
+  .app-footer {
+    font-size: 12px;
+    padding: 8px;
+  }
 }
 </style>

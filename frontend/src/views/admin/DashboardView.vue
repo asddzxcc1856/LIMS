@@ -174,6 +174,66 @@
           </a-col>
         </a-row>
 
+        <a-row :gutter="[16, 16]" style="margin-top: 16px">
+          <a-col :xs="24" :md="12">
+            <a-card
+              :title="t('admin.dashboard.chartUtilizationTitle')"
+              :bordered="false"
+              :body-style="{ padding: '16px 16px 8px' }"
+            >
+              <a-spin :spinning="chartsLoading">
+                <LineChart
+                  v-if="utilizationSeries.length"
+                  :data="utilizationSeries"
+                  :series="[{ name: t('admin.dashboard.chartUtilizationSeries'), key: 'utilization', color: '#1890ff' }]"
+                  :y-max="100"
+                  :y-format="(v) => `${v}%`"
+                  :aria-label="t('admin.dashboard.chartUtilizationTitle')"
+                />
+                <a-empty v-else :description="t('admin.dashboard.noChartData')" />
+              </a-spin>
+            </a-card>
+          </a-col>
+
+          <a-col :xs="24" :md="12">
+            <a-card
+              :title="t('admin.dashboard.chartOrderTrendTitle')"
+              :bordered="false"
+              :body-style="{ padding: '16px 16px 8px' }"
+            >
+              <a-spin :spinning="chartsLoading">
+                <LineChart
+                  v-if="orderTrendSeries.length"
+                  :data="orderTrendSeries"
+                  :series="[
+                    { name: t('admin.dashboard.chartOrderCreated'), key: 'created', color: '#1890ff' },
+                    { name: t('admin.dashboard.chartOrderDone'), key: 'done', color: '#52c41a' },
+                    { name: t('admin.dashboard.chartOrderRejected'), key: 'rejected', color: '#f5222d' },
+                  ]"
+                  :aria-label="t('admin.dashboard.chartOrderTrendTitle')"
+                />
+                <a-empty v-else :description="t('admin.dashboard.noChartData')" />
+              </a-spin>
+            </a-card>
+          </a-col>
+        </a-row>
+
+        <a-card
+          :title="t('admin.dashboard.chartOperatorTitle')"
+          :bordered="false"
+          style="margin-top: 16px"
+          :body-style="{ padding: '16px' }"
+        >
+          <a-spin :spinning="chartsLoading">
+            <BarChart
+              v-if="operatorActivityRows.length"
+              :data="operatorActivityRows"
+              :aria-label="t('admin.dashboard.chartOperatorTitle')"
+            />
+            <a-empty v-else :description="t('admin.dashboard.noChartData')" />
+          </a-spin>
+        </a-card>
+
         <a-card
           :title="t('admin.dashboard.recentActivity')"
           :bordered="false"
@@ -190,6 +250,7 @@
             :loading="logsLoading"
             size="small"
             row-key="id"
+            :scroll="{ x: 'max-content' }"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.dataIndex === 'action_type'">
@@ -230,7 +291,15 @@ import {
   ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons-vue'
-import { fetchActivityLogs, fetchAdminDashboard } from '../../api/admin'
+import {
+  fetchActivityLogs,
+  fetchAdminDashboard,
+  fetchChartEquipmentUtilization,
+  fetchChartOperatorActivity,
+  fetchChartOrderTrend,
+} from '../../api/admin'
+import LineChart from '../../components/charts/LineChart.vue'
+import BarChart from '../../components/charts/BarChart.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -240,6 +309,12 @@ const recentLogs = ref([])
 const logsLoading = ref(false)
 const autoRefresh = ref(true)
 let timer = null
+
+// Chart state — each lazy-loads alongside the dashboard refresh cycle.
+const utilizationSeries = ref([])
+const orderTrendSeries = ref([])
+const operatorActivityRows = ref([])
+const chartsLoading = ref(false)
 
 const logColumns = computed(() => [
   { title: t('admin.logs.colTime'), dataIndex: 'timestamp', width: 170 },
@@ -269,25 +344,45 @@ const actionsList = computed(() =>
     : [],
 )
 
+// Real rolling-24h utilization: sum of overlapping booking seconds divided
+// by total equipment-time in the window — backend now returns it directly.
 const equipmentUsage = computed(() => {
-  if (!stats.value || !stats.value.equipment.total) return 0
-  const occupied = stats.value.equipment.by_status.occupied || 0
-  return (occupied / stats.value.equipment.total) * 100
+  if (!stats.value) return 0
+  return stats.value.equipment.utilization_24h ?? 0
 })
 
 async function load() {
   loading.value = true
   logsLoading.value = true
+  chartsLoading.value = true
   try {
-    const [{ data: dash }, { data: logs }] = await Promise.all([
+    const [
+      { data: dash },
+      { data: logs },
+      { data: util },
+      { data: trend },
+      { data: ops },
+    ] = await Promise.all([
       fetchAdminDashboard(),
       fetchActivityLogs({ page: 1, page_size: 10 }),
+      fetchChartEquipmentUtilization(14),
+      fetchChartOrderTrend(14),
+      fetchChartOperatorActivity({ days: 30, limit: 8 }),
     ])
     stats.value = dash
     recentLogs.value = logs.results || []
+    utilizationSeries.value = util.series || []
+    orderTrendSeries.value = trend.series || []
+    operatorActivityRows.value = (ops.series || []).map((row) => ({
+      label: row.username,
+      value: row.events + row.approvals,
+      events: row.events,
+      approvals: row.approvals,
+    }))
   } finally {
     loading.value = false
     logsLoading.value = false
+    chartsLoading.value = false
   }
 }
 

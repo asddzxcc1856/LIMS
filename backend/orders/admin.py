@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Order, OrderStage
+from .models import Approval, Order, OrderStage
 
 
 class OrderStageInline(admin.TabularInline):
@@ -20,3 +20,10 @@ class OrderAdmin(admin.ModelAdmin):
 class OrderStageAdmin(admin.ModelAdmin):
     list_display = ['order', 'step_order', 'department', 'equipment_type', 'status', 'assignee']
     list_filter = ['status', 'department']
+
+
+@admin.register(Approval)
+class ApprovalAdmin(admin.ModelAdmin):
+    list_display = ['stage', 'decision', 'actor', 'decided_at']
+    list_filter = ['decision']
+    readonly_fields = ['decided_at']
