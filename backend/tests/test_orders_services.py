@@ -138,7 +138,7 @@ class TestApproveAndScheduleStage:
         stage = OrderStageFactory(
             order=order, equipment_type=equipment_type, status=OrderStage.Status.PENDING,
         )
-        with pytest.raises(ValidationError, match='Cannot approve'):
+        with pytest.raises(ValidationError, match='Cannot dispatch'):
             services.approve_and_schedule_stage(
                 stage,
                 schedule_start='2099-01-01T00:00:00Z',

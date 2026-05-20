@@ -48,8 +48,11 @@ class EquipmentListView(generics.ListCreateAPIView):
     """GET/POST /api/equipments/
 
     Scoped per role to keep the requester UI from peeking at machine
-    inventory: lab managers only see their own lab's units; superusers see
-    everything; everyone else gets an empty list.
+    inventory:
+    * lab_manager / lab_member of the lab see their own units (the
+      member needs this to populate the 派工 dropdown);
+    * superusers see everything;
+    * requesters get nothing — they never touch machines.
     """
     serializer_class = EquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -59,7 +62,7 @@ class EquipmentListView(generics.ListCreateAPIView):
         qs = Equipment.objects.select_related('equipment_type', 'department').all()
         if user.role == 'superuser':
             pass  # full access
-        elif user.role == 'lab_manager' and user.department_id:
+        elif user.role in ('lab_manager', 'lab_member') and user.department_id:
             from django.db.models import Q
             dept = user.department
             qs = qs.filter(
@@ -79,10 +82,34 @@ class EquipmentListView(generics.ListCreateAPIView):
 
 
 class EquipmentDetailView(generics.RetrieveUpdateAPIView):
-    """GET/PUT /api/equipments/<id>/"""
+    """GET/PUT /api/equipments/<id>/
+
+    Used by the manager-only UI to flip a machine to ``maintenance`` /
+    ``available`` etc. Triggers the post_save signal in
+    :mod:`equipments.signals` which fans out CRITICAL notifications
+    when status crosses into ``maintenance`` / ``pending``.
+    """
     queryset = Equipment.objects.select_related('equipment_type').all()
     serializer_class = EquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def update(self, request, *args, **kwargs):
+        # Manager + superuser only — operators cannot change machine
+        # state from the lab page.
+        if request.user.role not in ('lab_manager', 'superuser'):
+            return Response(
+                {'detail': 'Equipment status changes are restricted to lab supervisors.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role not in ('lab_manager', 'superuser'):
+            return Response(
+                {'detail': 'Equipment status changes are restricted to lab supervisors.'},
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+        return super().partial_update(request, *args, **kwargs)
 
 
 class EquipmentStatusMatrixView(APIView):
@@ -100,7 +127,9 @@ class EquipmentStatusMatrixView(APIView):
         user = request.user
         if user.role == 'superuser':
             scoped_equipments = Equipment.objects.all()
-        elif user.role == 'lab_manager' and user.department_id:
+        elif user.role in ('lab_manager', 'lab_member') and user.department_id:
+            # Lab members need the equipment timeline when picking a
+            # dispatch slot — broadened to match EquipmentListView.
             dept = user.department
             from django.db.models import Q
             scoped_equipments = Equipment.objects.filter(
@@ -109,7 +138,7 @@ class EquipmentStatusMatrixView(APIView):
             )
         else:
             return Response(
-                {'detail': 'Equipment overview is restricted to lab managers.'},
+                {'detail': 'Equipment overview is restricted to lab personnel.'},
                 status=http_status.HTTP_403_FORBIDDEN,
             )
 

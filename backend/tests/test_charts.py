@@ -35,9 +35,16 @@ def _auth_client(user):
 
 @pytest.mark.integration
 class TestChartEquipmentUtilization:
-    def test_requires_superuser(self, manager_client):
-        response = manager_client.get('/api/monitoring/charts/equipment-utilization/')
+    def test_blocked_for_non_manager(self, employee_client):
+        # Charts are now accessible to lab_manager + superuser. Requesters
+        # must NOT see lab-wide utilization.
+        response = employee_client.get('/api/monitoring/charts/equipment-utilization/')
         assert response.status_code in (401, 403)
+
+    def test_manager_can_read_lab_scoped_chart(self, manager_client):
+        response = manager_client.get('/api/monitoring/charts/equipment-utilization/?days=3')
+        assert response.status_code == 200
+        assert response.data['days'] == 3
 
     def test_returns_n_buckets(self, db):
         with freeze_time('2026-05-10 12:00:00'):
@@ -74,9 +81,13 @@ class TestChartEquipmentUtilization:
 
 @pytest.mark.integration
 class TestChartOrderTrend:
-    def test_requires_superuser(self, manager_client):
-        response = manager_client.get('/api/monitoring/charts/order-trend/')
+    def test_blocked_for_non_manager(self, employee_client):
+        response = employee_client.get('/api/monitoring/charts/order-trend/')
         assert response.status_code in (401, 403)
+
+    def test_manager_can_read(self, manager_client):
+        response = manager_client.get('/api/monitoring/charts/order-trend/?days=3')
+        assert response.status_code == 200
 
     def test_counts_created_and_done_per_day(self, db):
         with freeze_time('2026-05-10 12:00:00'):
@@ -103,9 +114,13 @@ class TestChartOrderTrend:
 
 @pytest.mark.integration
 class TestChartOperatorActivity:
-    def test_requires_superuser(self, manager_client):
-        response = manager_client.get('/api/monitoring/charts/operator-activity/')
+    def test_blocked_for_non_manager(self, employee_client):
+        response = employee_client.get('/api/monitoring/charts/operator-activity/')
         assert response.status_code in (401, 403)
+
+    def test_manager_can_read(self, manager_client):
+        response = manager_client.get('/api/monitoring/charts/operator-activity/')
+        assert response.status_code == 200
 
     def test_ranks_operators_by_event_volume(
         self, db, superuser_client, lab_member, lab_manager, order_stage,

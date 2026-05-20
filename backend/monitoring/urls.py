@@ -6,6 +6,7 @@ from .views import (
     ChartOperatorActivityView,
     ChartOrderTrendView,
     DashboardStatsView,
+    MyStatsView,
     NotificationListView,
     NotificationMarkAllReadView,
     NotificationMarkReadView,
@@ -16,6 +17,7 @@ app_name = 'monitoring'
 
 urlpatterns = [
     path('dashboard/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('my-stats/', MyStatsView.as_view(), name='my-stats'),
     path('logs/', ActivityLogListView.as_view(), name='activity-logs'),
     path(
         'charts/equipment-utilization/',

@@ -46,6 +46,11 @@
             <a-tag v-if="record.is_urgent" color="red">{{ t('orders.urgent') }}</a-tag>
             <span v-else class="muted">—</span>
           </template>
+          <template v-else-if="column.dataIndex === 'status'">
+            <a-tag :color="record.status === 'approved' ? 'cyan' : 'warning'">
+              {{ t(`stageStatus.${record.status}`, record.status) }}
+            </a-tag>
+          </template>
           <template v-else-if="column.dataIndex === 'received_at'">
             <a-tooltip
               v-if="record.received_at"
@@ -59,34 +64,21 @@
           </template>
           <template v-else-if="column.dataIndex === '__actions__'">
             <a-space wrap>
-              <a-popconfirm
-                v-if="!record.received_at"
-                :title="t('review.receiveConfirm', { no: record.order_no })"
-                :ok-text="t('common.confirm')"
-                :cancel-text="t('common.cancel')"
-                @confirm="handleReceive(record)"
-              >
-                <a-button size="small">
-                  <template #icon><InboxOutlined /></template>
-                  {{ t('review.receive') }}
+              <!-- Manager flow per the new division of labour:
+                   only 簽核 + 駁回 are visible. Both auto-hide the row
+                   from this queue afterwards because the table is
+                   filtered to WAITING — APPROVED stages move to the
+                   lab member workbench. -->
+              <template v-if="record.status === 'waiting'">
+                <a-button type="primary" size="small" @click="openSignoff(record)">
+                  <template #icon><SafetyCertificateOutlined /></template>
+                  {{ t('review.signoff') }}
                 </a-button>
-              </a-popconfirm>
-              <a-button size="small" @click="openSplit(record)">
-                <template #icon><ApartmentOutlined /></template>
-                {{ t('review.split') }}
-              </a-button>
-              <a-button size="small" @click="openSignoff(record)">
-                <template #icon><SafetyCertificateOutlined /></template>
-                {{ t('review.signoff') }}
-              </a-button>
-              <a-button type="primary" size="small" @click="openApprove(record)">
-                <template #icon><CheckOutlined /></template>
-                {{ t('review.approveSchedule') }}
-              </a-button>
-              <a-button danger size="small" @click="openReject(record)">
-                <template #icon><CloseOutlined /></template>
-                {{ t('review.reject') }}
-              </a-button>
+                <a-button danger size="small" @click="openReject(record)">
+                  <template #icon><CloseOutlined /></template>
+                  {{ t('review.reject') }}
+                </a-button>
+              </template>
               <a-button type="link" size="small" @click="openApprovalHistory(record)">
                 <template #icon><HistoryOutlined /></template>
                 {{ t('review.signoffHistory') }}
@@ -232,9 +224,44 @@
             :options="recipeOptionsForTarget"
             :loading="loadingRecipes"
             :disabled="!approveEquipment"
+            @change="syncOverridesWithRecipe"
           />
           <div class="recipe-help">{{ t('review.recipeHelp') }}</div>
         </a-form-item>
+
+        <!-- 參數設定: in-range overrides on the picked recipe's knobs.
+             Empty = use the recipe defaults. -->
+        <a-form-item
+          v-if="selectedRecipeParameters && Object.keys(selectedRecipeParameters).length"
+          :label="t('review.paramOverrides')"
+        >
+          <a-alert
+            type="info"
+            show-icon
+            :message="t('review.paramOverridesHint')"
+            style="margin-bottom: 8px"
+          />
+          <div
+            v-for="key in Object.keys(selectedRecipeParameters)"
+            :key="key"
+            class="override-row"
+          >
+            <div class="override-label">
+              <code>{{ key }}</code>
+              <span class="override-default">
+                {{ t('review.paramDefault') }}:
+                <code>{{ String(selectedRecipeParameters[key]) }}</code>
+              </span>
+            </div>
+            <a-input
+              v-model:value="approveParamOverrides[key]"
+              :placeholder="String(selectedRecipeParameters[key])"
+              allow-clear
+              size="small"
+            />
+          </div>
+        </a-form-item>
+
         <a-form-item :label="t('review.assignTo')">
           <a-select
             v-model:value="assignee"
@@ -447,8 +474,10 @@ import { fetchRecipes } from '../../api/equipments'
 import client from '../../api/client'
 import TimelineChart from '../../components/TimelineChart.vue'
 import { useBreakpoint } from '../../composables/useBreakpoint'
+import { useLocalizedLabel } from '../../composables/useLocalizedLabel'
 
 const { isMobile } = useBreakpoint()
+const { localized } = useLocalizedLabel()
 const historyDrawerWidth = computed(() => (isMobile.value ? '95vw' : 500))
 
 const stages = ref([])
@@ -457,7 +486,12 @@ const groupedEquipments = ref([])
 const allBookings = ref([])
 const loading = ref(false)
 
-const waitingStages = computed(() => stages.value.filter((s) => s.status === 'waiting'))
+// Manager queue now ONLY shows WAITING stages — once they sign off the
+// stage flips to APPROVED and disappears from this view (the lab member
+// workbench takes over from there).
+const waitingStages = computed(() =>
+  stages.value.filter((s) => s.status === 'waiting'),
+)
 const activeStages = computed(() => stages.value.filter((s) => s.status === 'in_progress'))
 
 const memberOptions = computed(() =>
@@ -469,13 +503,14 @@ const memberOptions = computed(() =>
 
 const waitingColumns = computed(() => [
   { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200 },
+  { title: t('orders.status'), dataIndex: 'status', width: 110 },
   { title: t('review.experiment'), dataIndex: 'experiment_name', width: 200 },
   { title: t('orders.requirements'), dataIndex: 'requirements', ellipsis: true },
   { title: t('review.requester'), dataIndex: 'user_name', width: 140 },
   { title: t('orders.lotId'), dataIndex: 'lot_id', width: 120 },
   { title: t('orders.urgent'), dataIndex: 'is_urgent', width: 80 },
   { title: t('review.received'), dataIndex: 'received_at', width: 140 },
-  { title: '', dataIndex: '__actions__', width: 280, fixed: 'right' },
+  { title: '', dataIndex: '__actions__', width: 320, fixed: 'right' },
 ])
 
 const activeColumns = computed(() => [
@@ -495,6 +530,7 @@ const scheduleEnd = ref(null)
 const assignee = ref(null)
 const approveEquipment = ref(null)
 const approveRecipe = ref(null)
+const approveParamOverrides = ref({})
 const approveBusy = ref(false)
 const approveError = ref('')
 const scheduleWarning = ref('')
@@ -502,6 +538,22 @@ const labMachines = ref([])
 const loadingMachines = ref(false)
 const labRecipes = ref([])
 const loadingRecipes = ref(false)
+
+// Resolve the parameter dict of the currently-picked recipe so the
+// override editor can render one input per knob. Re-syncs whenever the
+// recipe pick changes (see syncOverridesWithRecipe).
+const selectedRecipeParameters = computed(() => {
+  if (!approveRecipe.value) return {}
+  const recipe = labRecipes.value.find((r) => r.id === approveRecipe.value)
+  return recipe?.parameters || {}
+})
+
+function syncOverridesWithRecipe() {
+  // Clear stale overrides when the manager re-picks a recipe — the old
+  // keys may not exist on the new one and the backend would reject the
+  // request anyway.
+  approveParamOverrides.value = {}
+}
 
 const machineOptionsForTarget = computed(() =>
   // Experiments don't pre-define equipment types anymore, so the picker
@@ -531,7 +583,7 @@ const recipeOptionsForTarget = computed(() => {
     .filter((r) => r.equipment_type === typeId && r.is_active)
     .map((r) => ({
       value: r.id,
-      label: `${r.name} v${r.version}`,
+      label: `${localized(r)} v${r.version}`,
     }))
 })
 
@@ -671,6 +723,7 @@ function openApprove(stage) {
   assignee.value = null
   approveEquipment.value = null
   approveRecipe.value = null
+  approveParamOverrides.value = {}
   approveError.value = ''
   scheduleWarning.value = ''
   approveOpen.value = true
@@ -697,6 +750,15 @@ async function confirmApprove() {
   }
   approveBusy.value = true
   try {
+    // Drop empty-string overrides so the backend only stores knobs that
+    // the operator actually touched. Strings get sent as-is — recipe
+    // parameter values are JSON-encoded so a numeric default rendered
+    // here as "250" gets stored as "250" (string). Keep it simple; let
+    // the backend coerce if needed.
+    const cleanedOverrides = Object.fromEntries(
+      Object.entries(approveParamOverrides.value)
+        .filter(([, v]) => v !== '' && v != null),
+    )
     await reviewStage(approveTarget.value.id, {
       action: 'approve',
       schedule_start: scheduleStart.value.toISOString(),
@@ -704,6 +766,7 @@ async function confirmApprove() {
       assignee: assignee.value,
       equipment: approveEquipment.value,
       recipe: approveRecipe.value,
+      parameter_overrides: cleanedOverrides,
     })
     approveOpen.value = false
     message.success(t('review.approveSuccess'))
@@ -887,6 +950,23 @@ function formatDate(value) {
 .schedule-cell {
   font-size: 12px;
   line-height: 1.6;
+}
+.override-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.override-label {
+  flex: 1;
+  font-size: 12px;
+}
+.override-default {
+  margin-left: 8px;
+  color: var(--c-text-muted);
+}
+.override-row :deep(.ant-input) {
+  max-width: 200px;
 }
 .recipe-help {
   color: var(--c-text-muted);

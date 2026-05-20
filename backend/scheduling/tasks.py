@@ -19,6 +19,93 @@ from celery import shared_task
 from django.utils import timezone
 
 
+@shared_task(name='scheduling.auto_close_stalled_samples')
+def auto_close_stalled_samples(grace_minutes=5):
+    """Auto-complete RUNNING Samples whose schedule_end is past + has
+    at least one telemetry/event row. Matches the per-sample dispatch
+    architecture (post-refactor).
+
+    Returns list of sample IDs that were closed.
+    """
+    from orders.models import Sample
+    from orders.services import complete_sample
+
+    cutoff = timezone.now() - timedelta(minutes=grace_minutes)
+    candidates = (
+        Sample.objects
+        .filter(
+            status=Sample.Status.RUNNING,
+            schedule_end__lt=cutoff,
+        )
+        .distinct()
+    )
+    closed = []
+    for sample in candidates:
+        try:
+            complete_sample(sample, operator=None)
+            closed.append(str(sample.id))
+        except Exception:
+            continue
+    return closed
+
+
+@shared_task(name='scheduling.alert_schedule_overruns')
+def alert_schedule_overruns(grace_minutes=30):
+    """Scan RUNNING samples that have been running > grace_minutes past
+    schedule_end and emit a CRITICAL notification to the assigned lab
+    member + the lab's manager(s).
+
+    Idempotent in spirit: only one alert per sample within the grace
+    window via `Notification.kind=equipment_alert` dedup check on
+    `related_stage` (best effort).
+    """
+    from orders.models import Sample
+    from monitoring.models import Notification
+    from monitoring.services import notify_many
+
+    cutoff = timezone.now() - timedelta(minutes=grace_minutes)
+    overrun = Sample.objects.filter(
+        status=Sample.Status.RUNNING,
+        schedule_end__lt=cutoff,
+    ).select_related('assignee', 'order', 'order__department', 'equipment')
+
+    alerted = []
+    for sample in overrun:
+        stage = sample.order.stages.first()
+        # Dedup — skip if we already alerted this stage in the window.
+        existing = Notification.objects.filter(
+            related_stage=stage,
+            kind=Notification.Kind.EQUIPMENT_ALERT,
+            created_at__gte=cutoff,
+        ).exists()
+        if existing:
+            continue
+        recipients = []
+        if sample.assignee_id:
+            recipients.append(sample.assignee)
+        dept = sample.order.department
+        if dept:
+            recipients.extend(dept.members.filter(role='lab_manager'))
+        if not recipients:
+            continue
+        notify_many(
+            recipients,
+            level=Notification.Level.CRITICAL,
+            kind=Notification.Kind.EQUIPMENT_ALERT,
+            title=f'⏰ Sample {sample.sub_code} 超時 ({sample.order.order_no})',
+            body=(
+                f'Sample {sample.sub_code} 在機台 '
+                f'{sample.equipment.code if sample.equipment else "?"} 上 '
+                f'已超出排程 {grace_minutes} 分鐘未下貨。請介入處理。'
+            ),
+            related_order=sample.order,
+            related_stage=stage,
+            related_equipment=sample.equipment,
+        )
+        alerted.append(str(sample.id))
+    return alerted
+
+
 @shared_task(name='scheduling.auto_close_stalled_stages')
 def auto_close_stalled_stages(grace_minutes=5):
     """Auto-complete in-progress stages that are visibly finished.

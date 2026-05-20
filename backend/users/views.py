@@ -53,13 +53,28 @@ class WaferLotListView(generics.ListAPIView):
     Scoped to the requester's own fab — they pick from a curated dropdown
     rather than typing a lot ID free-form. Superusers can override the scope
     via ``?fab_id=<uuid>``.
+
+    Each row carries lock / history annotations so the submission UI can
+    grey out locked lots and surface what experiments have already run.
     """
     serializer_class = WaferLotSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):
-        qs = WaferLot.objects.select_related('fab').all()
+        from django.db.models import Prefetch
+        from orders.models import Order
+        qs = WaferLot.objects.select_related('fab').prefetch_related(
+            Prefetch(
+                'orders',
+                # Only the columns the serializer needs — keeps the join
+                # small even when a hot lot has dozens of historical orders.
+                queryset=Order.objects.select_related('experiment').only(
+                    'id', 'order_no', 'status', 'ended_at',
+                    'experiment__id', 'experiment__name', 'lot_id',
+                ).order_by('-created_at'),
+            ),
+        )
         user = self.request.user
         fab_id_override = self.request.query_params.get('fab_id')
         if user.role == 'superuser':
@@ -73,7 +88,13 @@ class WaferLotListView(generics.ListAPIView):
 
 
 class UserListView(generics.ListAPIView):
-    """GET /api/users/ – list all users (lab_manager / superuser only)."""
+    """GET /api/users/ – list users in the caller's scope.
+
+    Query params:
+      * ``role=lab_member`` — narrow to a single role (used by the
+        派工 / 啟動 dialogs whose assignee picker must NOT include
+        lab_manager).
+    """
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -82,5 +103,12 @@ class UserListView(generics.ListAPIView):
         qs = User.objects.select_related('department').all()
         if user.is_authenticated and user.role == 'lab_manager':
             qs = qs.filter(department=user.department)
+        elif user.is_authenticated and user.role == 'lab_member' and user.department_id:
+            # Lab members need to see their own lab roster too — the 啟動
+            # dialog (which they own now) pops up an assignee dropdown.
+            qs = qs.filter(department=user.department)
 
+        role = self.request.query_params.get('role')
+        if role:
+            qs = qs.filter(role=role)
         return qs

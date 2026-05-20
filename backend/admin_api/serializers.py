@@ -106,7 +106,7 @@ class ExperimentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Experiment
         fields = (
-            'id', 'name', 'remark',
+            'id', 'name', 'name_en', 'remark', 'remark_en',
             'department', 'department_name',
             'requirement_count',
         )
@@ -117,7 +117,7 @@ class EquipmentTypeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = EquipmentType
-        fields = ('id', 'name', 'equipment_count')
+        fields = ('id', 'name', 'name_en', 'equipment_count')
 
 
 class EquipmentSerializer(serializers.ModelSerializer):
@@ -151,6 +151,9 @@ class EquipmentSerializer(serializers.ModelSerializer):
 
 class RecipeSerializer(serializers.ModelSerializer):
     equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
+    equipment_type_name_en = serializers.CharField(
+        source='equipment_type.name_en', read_only=True, default='',
+    )
     created_by_username = serializers.CharField(
         source='created_by.username', read_only=True, default=None,
     )
@@ -158,8 +161,10 @@ class RecipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = (
-            'id', 'name', 'version', 'parameters', 'remark', 'is_active',
-            'equipment_type', 'equipment_type_name',
+            'id', 'name', 'name_en', 'version', 'parameters',
+            'remark', 'remark_en',
+            'is_active',
+            'equipment_type', 'equipment_type_name', 'equipment_type_name_en',
             'created_by', 'created_by_username',
             'created_at', 'updated_at',
         )
@@ -238,6 +243,7 @@ class OrderStageSerializer(serializers.ModelSerializer):
             'assignee', 'assignee_username',
             'equipment', 'equipment_code',
             'recipe', 'recipe_name', 'recipe_version',
+            'parameter_overrides',
             'received_at', 'received_by', 'received_by_username',
             'status',
             'schedule_start', 'schedule_end', 'completed_at',
@@ -257,6 +263,7 @@ class SampleAdminSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'order', 'order_no',
             'sub_code', 'full_code', 'wafer_count', 'notes',
+            'execution_order',
             'parent_sample',
             'created_at', 'created_by', 'created_by_username',
         )

@@ -103,6 +103,41 @@ def _clamp(value, default, lo, hi):
     return max(lo, min(n, hi))
 
 
+def _is_manager_or_superuser(user):
+    return user.role in ('lab_manager', 'superuser')
+
+
+def _equipment_qs_for_user(user):
+    """Equipment queryset scoped to the user. lab_manager sees only
+    their lab's machines so charts reflect *their* lab,not全廠."""
+    from django.db.models import Q
+    qs = Equipment.objects.all()
+    if user.role == 'superuser':
+        return qs
+    if user.role == 'lab_manager' and user.department_id:
+        dept = user.department
+        return qs.filter(
+            Q(department_id=user.department_id)
+            | Q(department__fab_id=dept.fab_id, department__name=dept.name)
+        )
+    return qs.none()
+
+
+def _order_qs_for_user(user):
+    """Same idea for orders — manager only sees their lab's orders."""
+    from django.db.models import Q
+    qs = Order.objects.all()
+    if user.role == 'superuser':
+        return qs
+    if user.role == 'lab_manager' and user.department_id:
+        dept = user.department
+        return qs.filter(
+            Q(department_id=user.department_id)
+            | Q(department__fab_id=dept.fab_id, department__name=dept.name)
+        )
+    return qs.none()
+
+
 def _day_buckets(end, days):
     """Yield ``(label, day_start_aware, day_end_aware)`` for the last *days* days
     ending (inclusive) at *end*'s date — used as a stable axis for the
@@ -125,18 +160,27 @@ class ChartEquipmentUtilizationView(APIView):
     overstated short-bursting labs and understated dormant ones.
     """
 
-    permission_classes = (IsSystemSuperuser,)
+    permission_classes = (IsAuthenticated,)
 
     def get(self, request):
+        if not _is_manager_or_superuser(request.user):
+            return Response(
+                {'detail': 'Restricted to lab supervisors and superusers.'},
+                status=403,
+            )
         days = _clamp(request.query_params.get('days'), default=7, lo=1, hi=60)
-        eq_count = Equipment.objects.count()
+        eq_qs = _equipment_qs_for_user(request.user)
+        eq_count = eq_qs.count()
+        eq_ids = list(eq_qs.values_list('id', flat=True))
         now = timezone.now()
         results = []
 
         for label, day_start, day_end in _day_buckets(now, days):
-            # Only fetch bookings that overlap this day; the index on
-            # (started_at, ended_at) keeps this tight even with 10k rows.
+            # Only fetch bookings that overlap this day AND target the
+            # caller's lab; index on (started_at, ended_at) keeps it
+            # tight even with 10k rows.
             bookings = EquipmentBooking.objects.filter(
+                equipment_id__in=eq_ids,
                 started_at__lt=day_end, ended_at__gt=day_start,
             ).values_list('started_at', 'ended_at')
 
@@ -171,21 +215,27 @@ class ChartOrderTrendView(APIView):
     * ``rejected``— orders that ended in REJECTED on this day
     """
 
-    permission_classes = (IsSystemSuperuser,)
+    permission_classes = (IsAuthenticated,)
 
     def get(self, request):
+        if not _is_manager_or_superuser(request.user):
+            return Response(
+                {'detail': 'Restricted to lab supervisors and superusers.'},
+                status=403,
+            )
         days = _clamp(request.query_params.get('days'), default=30, lo=1, hi=90)
         now = timezone.now()
+        orders_qs = _order_qs_for_user(request.user)
         results = []
 
         for label, day_start, day_end in _day_buckets(now, days):
-            created = Order.objects.filter(
+            created = orders_qs.filter(
                 created_at__gte=day_start, created_at__lt=day_end,
             ).count()
-            done = Order.objects.filter(
+            done = orders_qs.filter(
                 ended_at__gte=day_start, ended_at__lt=day_end, status=Order.Status.DONE,
             ).count()
-            rejected = Order.objects.filter(
+            rejected = orders_qs.filter(
                 ended_at__gte=day_start, ended_at__lt=day_end, status=Order.Status.REJECTED,
             ).count()
             results.append({
@@ -209,22 +259,43 @@ class ChartOperatorActivityView(APIView):
     chart shows who's most active across both surfaces.
     """
 
-    permission_classes = (IsSystemSuperuser,)
+    permission_classes = (IsAuthenticated,)
 
     def get(self, request):
+        if not _is_manager_or_superuser(request.user):
+            return Response(
+                {'detail': 'Restricted to lab supervisors and superusers.'},
+                status=403,
+            )
         days = _clamp(request.query_params.get('days'), default=30, lo=1, hi=90)
         limit = _clamp(request.query_params.get('limit'), default=10, lo=1, hi=50)
         since = timezone.now() - timedelta(days=days)
+        user = request.user
+
+        # Lab-scope filter: manager sees only operators of their own
+        # dept; superuser sees everyone.
+        from django.db.models import Q
+        if user.role == 'lab_manager' and user.department_id:
+            dept = user.department
+            dept_filter = Q(department_id=user.department_id) | Q(
+                department__fab_id=dept.fab_id, department__name=dept.name,
+            )
+        else:
+            dept_filter = Q()
 
         event_rows = (
             StageEvent.objects
             .filter(occurred_at__gte=since, operator__isnull=False)
+            .filter(**({'operator__department_id': user.department_id}
+                       if user.role == 'lab_manager' and user.department_id else {}))
             .values('operator_id', 'operator__username')
             .annotate(events=Count('id'))
         )
         approval_rows = (
             Approval.objects
             .filter(decided_at__gte=since, actor__isnull=False)
+            .filter(**({'actor__department_id': user.department_id}
+                       if user.role == 'lab_manager' and user.department_id else {}))
             .values('actor_id', 'actor__username')
             .annotate(approvals=Count('id'))
         )
@@ -330,6 +401,184 @@ class NotificationSummaryView(APIView):
             'unread': base.count(),
             'critical_unread': base.filter(level=Notification.Level.CRITICAL).count(),
         })
+
+
+class MyStatsView(APIView):
+    """GET /api/monitoring/my-stats/
+
+    Per-role workload snapshot for the home dashboard. Different roles
+    care about different counters:
+
+    * **lab_manager** — how many stages of *my* lab are waiting for me
+      to sign off (or have been signed off and are now moving through
+      lab-member hands). Also exposes today's reject count.
+    * **lab_member** — per-phase Sample counts the member should pay
+      attention to (待派工 / 待設參數 / 待指派 / 待上貨 / 進行中 /
+      assigned to me).
+    * **regular_employee / superuser** — the requester gets their own
+      order status breakdown; superuser falls back to the full dashboard.
+
+    Returns ``{'role': ..., 'cards': [{label, value, color, hint}, …]}``
+    so the frontend can drive a single render loop and we can add new
+    cards later without changing the contract.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        user = request.user
+        role = user.role
+        cards = []
+
+        if role == 'lab_manager':
+            cards = self._manager_cards(user)
+        elif role == 'lab_member':
+            cards = self._member_cards(user)
+        elif role == 'regular_employee':
+            cards = self._employee_cards(user)
+        else:
+            # Superusers get the same employee-style cards so the home
+            # widget always renders something useful — the full dashboard
+            # is one click away.
+            cards = self._superuser_cards()
+
+        return Response({'role': role, 'cards': cards})
+
+    # ── per-role builders ───────────────────────────────────────
+
+    def _manager_cards(self, user):
+        from orders.models import OrderStage, Order
+        dept_id = user.department_id
+        from django.db.models import Q
+        dept = user.department
+        same_lab = (
+            Q(department_id=dept_id)
+            | Q(department__fab_id=dept.fab_id, department__name=dept.name)
+        ) if dept_id else Q(pk=None)
+
+        waiting_signoff = OrderStage.objects.filter(
+            same_lab, status=OrderStage.Status.WAITING,
+        ).count()
+        approved = OrderStage.objects.filter(
+            same_lab, status=OrderStage.Status.APPROVED,
+        ).count()
+        in_progress = OrderStage.objects.filter(
+            same_lab, status=OrderStage.Status.IN_PROGRESS,
+        ).count()
+        rejected_today = OrderStage.objects.filter(
+            same_lab, status=OrderStage.Status.REJECTED,
+        ).count()
+
+        return [
+            {
+                'key': 'waiting_signoff',
+                'label': '待簽核',
+                'value': waiting_signoff,
+                'color': '#fa8c16',
+                'hint': '此實驗室目前等待主管簽核的訂單階段數',
+            },
+            {
+                'key': 'approved_dispatch',
+                'label': '已簽核 進行中分貨/派工',
+                'value': approved,
+                'color': '#1890ff',
+                'hint': '簽核完成,實驗室人員正在分貨 / 派工 / 設定參數 / 指派的階段數',
+            },
+            {
+                'key': 'in_progress',
+                'label': '上機進行中',
+                'value': in_progress,
+                'color': '#52c41a',
+                'hint': '至少有一個子 LOT 已上貨並在機台執行',
+            },
+            {
+                'key': 'rejected_total',
+                'label': '已駁回',
+                'value': rejected_today,
+                'color': '#f5222d',
+                'hint': '本實驗室目前累計駁回的階段數',
+            },
+        ]
+
+    def _member_cards(self, user):
+        from orders.models import OrderStage, Sample
+        from django.db.models import Q
+        dept_id = user.department_id
+        dept = user.department
+        same_lab_stage = (
+            Q(department_id=dept_id)
+            | Q(department__fab_id=dept.fab_id, department__name=dept.name)
+        ) if dept_id else Q(pk=None)
+        same_lab_sample = (
+            Q(order__department_id=dept_id)
+            | Q(order__department__fab_id=dept.fab_id,
+                order__department__name=dept.name)
+        ) if dept_id else Q(pk=None)
+
+        to_receive = OrderStage.objects.filter(
+            same_lab_stage,
+            status=OrderStage.Status.WAITING,
+            received_at__isnull=True,
+        ).count()
+        to_split = OrderStage.objects.filter(
+            same_lab_stage,
+            status=OrderStage.Status.APPROVED,
+        ).annotate(sample_count=Count('order__samples')).filter(
+            sample_count=0,
+        ).count()
+        # Sample-level counters
+        to_dispatch = Sample.objects.filter(same_lab_sample, status=Sample.Status.WAITING).count()
+        to_params = Sample.objects.filter(same_lab_sample, status=Sample.Status.DISPATCHED).count()
+        to_assign = Sample.objects.filter(same_lab_sample, status=Sample.Status.PARAMS_SET).count()
+        my_ready = Sample.objects.filter(assignee=user, status=Sample.Status.READY).count()
+        my_running = Sample.objects.filter(assignee=user, status=Sample.Status.RUNNING).count()
+        my_done = Sample.objects.filter(assignee=user, status=Sample.Status.DONE).count()
+
+        return [
+            {'key': 'to_receive', 'label': '待接件', 'value': to_receive, 'color': '#fa8c16',
+             'hint': '廠區已送來、實驗室尚未點收的訂單'},
+            {'key': 'to_split', 'label': '待分貨', 'value': to_split, 'color': '#722ed1',
+             'hint': '主管已簽核但尚未進行分貨的訂單'},
+            {'key': 'to_dispatch', 'label': '待派工 (子LOT)', 'value': to_dispatch, 'color': '#1890ff',
+             'hint': '已分貨但尚未指派機台 + Recipe + 排程的子 LOT'},
+            {'key': 'to_params', 'label': '待設定參數 (子LOT)', 'value': to_params, 'color': '#13c2c2',
+             'hint': '已派工但尚未在 Recipe 範圍內設定參數的子 LOT'},
+            {'key': 'to_assign', 'label': '待指派員工 (子LOT)', 'value': to_assign, 'color': '#52c41a',
+             'hint': '已設參數但尚未指派執行員工的子 LOT'},
+            {'key': 'my_ready', 'label': '我待上貨', 'value': my_ready, 'color': '#722ed1',
+             'hint': '已指派給我、等我上貨開始實驗的子 LOT'},
+            {'key': 'my_running', 'label': '我進行中', 'value': my_running, 'color': '#fa541c',
+             'hint': '我正在機台上執行中的子 LOT'},
+            {'key': 'my_done', 'label': '我已完成', 'value': my_done, 'color': '#8c8c8c',
+             'hint': '我累計完成的子 LOT 數'},
+        ]
+
+    def _employee_cards(self, user):
+        from orders.models import Order
+        base = Order.objects.filter(user=user)
+        return [
+            {'key': 'waiting', 'label': '送樣中 (待主管簽核)', 'value': base.filter(status='waiting').count(),
+             'color': '#fa8c16', 'hint': '送出後等實驗室主管簽核的訂單數'},
+            {'key': 'in_progress', 'label': '進行中', 'value': base.filter(status='in_progress').count(),
+             'color': '#1890ff', 'hint': '已派工、實驗正在進行的訂單數'},
+            {'key': 'done', 'label': '已完成', 'value': base.filter(status='done').count(),
+             'color': '#52c41a', 'hint': '已完成可取件的訂單數'},
+            {'key': 'rejected', 'label': '被駁回', 'value': base.filter(status='rejected').count(),
+             'color': '#f5222d', 'hint': '被實驗室主管駁回的訂單數'},
+        ]
+
+    def _superuser_cards(self):
+        from orders.models import Order, OrderStage, Sample
+        return [
+            {'key': 'orders', 'label': '訂單總數', 'value': Order.objects.count(),
+             'color': '#1890ff', 'hint': '整個系統累計訂單數'},
+            {'key': 'stages_waiting', 'label': '待簽核', 'value':
+                OrderStage.objects.filter(status='waiting').count(),
+             'color': '#fa8c16', 'hint': '全系統等待主管簽核的階段數'},
+            {'key': 'samples_running', 'label': 'Sample 進行中', 'value':
+                Sample.objects.filter(status='running').count(),
+             'color': '#52c41a', 'hint': '全系統正在機台上執行的子 LOT 數'},
+        ]
 
 
 class ActivityLogListView(generics.ListAPIView):

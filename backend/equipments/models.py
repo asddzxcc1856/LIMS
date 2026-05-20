@@ -9,10 +9,16 @@ class Experiment(models.Model):
     One experiment is performed at exactly one lab (Department). The
     requester picks the experiment and the order is automatically routed to
     that lab — they never pick a lab or a machine themselves.
+
+    ``name`` is the primary (zh-TW) display string; ``name_en`` /
+    ``remark_en`` are optional English variants. The serializer surfaces
+    both and the frontend picks based on ``useI18n().locale``.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200, unique=True)
+    name_en = models.CharField(max_length=200, blank=True, default='')
     remark = models.TextField(blank=True, default='')
+    remark_en = models.TextField(blank=True, default='')
     department = models.ForeignKey(
         'users.Department',
         on_delete=models.PROTECT,
@@ -33,6 +39,7 @@ class EquipmentType(models.Model):
     """Category / type of equipment (e.g. SEM, AFM)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
+    name_en = models.CharField(max_length=100, blank=True, default='')
 
     class Meta:
         db_table = 'equipment_type'
@@ -93,6 +100,7 @@ class Recipe(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True, default='')
     equipment_type = models.ForeignKey(
         EquipmentType,
         on_delete=models.PROTECT,
@@ -101,6 +109,7 @@ class Recipe(models.Model):
     version = models.PositiveIntegerField(default=1)
     parameters = models.JSONField(default=dict, blank=True)
     remark = models.TextField(blank=True, default='')
+    remark_en = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

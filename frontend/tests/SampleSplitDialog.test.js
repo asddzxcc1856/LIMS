@@ -126,18 +126,18 @@ describe('SampleSplitDialog', () => {
     await flushPromises()
 
     wrapper.vm.splits = [
-      { sub_code: ' A ', wafer_count: 4, notes: 'lead' },
-      { sub_code: '', wafer_count: 1, notes: 'blank-row-should-be-filtered' },
-      { sub_code: 'B', wafer_count: '2', notes: '' },
+      { sub_code: ' A ', wafer_count: 4, execution_order: 2, notes: 'lead' },
+      { sub_code: '', wafer_count: 1, execution_order: 0, notes: 'blank-row-should-be-filtered' },
+      { sub_code: 'B', wafer_count: '2', execution_order: '1', notes: '' },
     ]
     // Act
     await wrapper.vm.confirm()
     await flushPromises()
-    // Assert — second row dropped, sub_code trimmed, wafer_count coerced
+    // Assert — second row dropped, sub_code trimmed, numerics coerced
     expect(splitOrderSamples).toHaveBeenCalledWith('order-1', {
       splits: [
-        { sub_code: 'A', wafer_count: 4, notes: 'lead' },
-        { sub_code: 'B', wafer_count: 2, notes: '' },
+        { sub_code: 'A', wafer_count: 4, execution_order: 2, notes: 'lead' },
+        { sub_code: 'B', wafer_count: 2, execution_order: 1, notes: '' },
       ],
     })
     expect(wrapper.emitted('split-saved')).toBeTruthy()
@@ -152,7 +152,7 @@ describe('SampleSplitDialog', () => {
     const wrapper = await mountDialog()
     await wrapper.setProps({ open: true })
     await flushPromises()
-    wrapper.vm.splits = [{ sub_code: 'A', wafer_count: 1, notes: '' }]
+    wrapper.vm.splits = [{ sub_code: 'A', wafer_count: 1, execution_order: 0, notes: '' }]
     // Act
     await wrapper.vm.confirm()
     await flushPromises()

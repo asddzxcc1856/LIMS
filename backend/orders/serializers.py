@@ -18,6 +18,15 @@ class OrderStageSerializer(serializers.ModelSerializer):
     received_by_username = serializers.CharField(
         source='received_by.username', read_only=True, default=None,
     )
+    parameters_set_by_username = serializers.CharField(
+        source='parameters_set_by.username', read_only=True, default=None,
+    )
+    # ``sample_count`` is read by the lab workbench tabs to decide whether
+    # the stage has already been split — it's the gate that keeps 待分貨
+    # and 待派工 distinct (no count → still in 分貨 queue).
+    sample_count = serializers.IntegerField(
+        source='order.samples.count', read_only=True,
+    )
 
     # Metadata from parent order — the manager uses experiment_name as the
     # recipe context when scheduling. equipment_type_name is kept for legacy
@@ -37,6 +46,9 @@ class OrderStageSerializer(serializers.ModelSerializer):
             'id', 'order', 'step_order', 'department_name',
             'status', 'assignee', 'assignee_name', 'equipment', 'equipment_code',
             'recipe', 'recipe_name', 'recipe_version', 'recipe_parameters',
+            'parameter_overrides',
+            'parameters_set_at', 'parameters_set_by', 'parameters_set_by_username',
+            'sample_count',
             'received_at', 'received_by', 'received_by_username',
             'order_no', 'user_name', 'lot_id',
             'experiment_name', 'is_urgent', 'requirements', 'remark', 'equipment_type_name',
@@ -139,23 +151,76 @@ class ApprovalSerializer(serializers.ModelSerializer):
 
 
 class SampleSerializer(serializers.ModelSerializer):
-    """Sample row — used by /samples/ endpoints and admin CRUD."""
+    """Sample row — used by /samples/ endpoints and admin CRUD.
+
+    Surfaces the per-sample dispatch fields so the lab workbench can
+    show one row per sub-LOT in each phase tab.
+    """
 
     full_code = serializers.CharField(read_only=True)
     order_no = serializers.CharField(source='order.order_no', read_only=True)
     created_by_username = serializers.CharField(
         source='created_by.username', read_only=True, default=None,
     )
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    equipment_code = serializers.CharField(source='equipment.code', read_only=True, default=None)
+    equipment_type_name = serializers.CharField(
+        source='equipment.equipment_type.name', read_only=True, default=None,
+    )
+    equipment_type_name_en = serializers.CharField(
+        source='equipment.equipment_type.name_en', read_only=True, default=None,
+    )
+    recipe_name = serializers.CharField(source='recipe.name', read_only=True, default=None)
+    recipe_name_en = serializers.CharField(source='recipe.name_en', read_only=True, default=None)
+    recipe_version = serializers.IntegerField(source='recipe.version', read_only=True, default=None)
+    recipe_parameters = serializers.JSONField(source='recipe.parameters', read_only=True, default=None)
+    assignee_username = serializers.CharField(source='assignee.username', read_only=True, default=None)
+    parameters_set_by_username = serializers.CharField(
+        source='parameters_set_by.username', read_only=True, default=None,
+    )
+    dispatched_by_username = serializers.CharField(
+        source='dispatched_by.username', read_only=True, default=None,
+    )
+    loaded_by_username = serializers.CharField(
+        source='loaded_by.username', read_only=True, default=None,
+    )
+    completed_by_username = serializers.CharField(
+        source='completed_by.username', read_only=True, default=None,
+    )
+    # Surface lab + experiment context so the workbench can group by
+    # lab without re-fetching the parent stage.
+    department_name = serializers.CharField(source='order.department.name', read_only=True)
+    experiment_name = serializers.CharField(source='order.experiment.name', read_only=True, default=None)
+    experiment_name_en = serializers.CharField(source='order.experiment.name_en', read_only=True, default=None)
+    lot_id = serializers.CharField(source='order.lot_id', read_only=True, default='')
 
     class Meta:
         model = Sample
         fields = [
             'id', 'order', 'order_no',
             'sub_code', 'full_code', 'wafer_count', 'notes',
+            'execution_order',
             'parent_sample',
+            'status', 'status_display',
+            'equipment', 'equipment_code', 'equipment_type_name', 'equipment_type_name_en',
+            'recipe', 'recipe_name', 'recipe_name_en', 'recipe_version', 'recipe_parameters',
+            'parameter_overrides',
+            'parameters_set_at', 'parameters_set_by', 'parameters_set_by_username',
+            'dispatched_by', 'dispatched_by_username',
+            'assignee', 'assignee_username',
+            'schedule_start', 'schedule_end',
+            'loaded_at', 'loaded_by', 'loaded_by_username',
+            'completed_at', 'completed_by', 'completed_by_username',
+            'department_name', 'experiment_name', 'experiment_name_en', 'lot_id',
             'created_at', 'created_by', 'created_by_username',
         ]
-        read_only_fields = ['id', 'created_at', 'created_by']
+        read_only_fields = [
+            'id', 'created_at', 'created_by',
+            'status', 'equipment', 'recipe', 'parameter_overrides',
+            'parameters_set_at', 'parameters_set_by',
+            'assignee', 'schedule_start', 'schedule_end',
+            'loaded_at', 'loaded_by', 'completed_at', 'completed_by',
+        ]
 
 
 class OrderReviewSerializer(serializers.Serializer):
