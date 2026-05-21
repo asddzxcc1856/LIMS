@@ -60,6 +60,22 @@ export const fetchChartOrderTrend = (days = 30) =>
 export const fetchChartOperatorActivity = (params = {}) =>
   client.get('/monitoring/charts/operator-activity/', { params })
 
+/** Per-operator action timeline (approvals + stage events + sample lifecycle). */
+export const fetchOperatorActivityDetail = (userId, params = {}) =>
+  client.get(`/monitoring/charts/operator-activity/${userId}/`, { params })
+
+/** Order business stats: stage breakdown, lead times, equipment-type rollups. */
+export const fetchChartOrderBusiness = (days = 30) =>
+  client.get('/monitoring/charts/order-business/', { params: { days } })
+
+/** Browse list of samples (sub-LOTs) for the manager-reports drill-down. */
+export const fetchLotHistoryList = (params = {}) =>
+  client.get('/monitoring/lot-history/', { params })
+
+/** Per-sample step-by-step timeline (sign-off → split → … → done). */
+export const fetchLotHistoryDetail = (sampleId) =>
+  client.get(`/monitoring/lot-history/${sampleId}/`)
+
 // ──────── Notifications (bell icon) ────────
 export const fetchNotifications = (params = {}) =>
   client.get('/monitoring/notifications/', { params })

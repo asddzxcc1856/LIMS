@@ -94,7 +94,9 @@ class TestLabScopedRecipeList:
         RecipeFactory()
         response = employee_client.get('/api/equipments/recipes/')
         assert response.status_code == 200
-        assert response.data['results'] == [] or response.data == []
+        # Endpoint disables pagination (the dispatch dialog reads the
+        # full list client-side); the response is therefore a raw list.
+        assert response.data == []
 
     def test_manager_sees_only_in_lab_recipes(self, manager_client, department, lab_manager):
         # Arrange — one recipe whose equipment type has a unit in this lab,
@@ -108,12 +110,10 @@ class TestLabScopedRecipeList:
         # Act
         response = manager_client.get('/api/equipments/recipes/')
         # Assert
-        names = {row['name'] for row in (response.data.get('results') or response.data)}
+        names = {row['name'] for row in response.data}
         assert 'in-lab' in names
         assert 'out-lab' not in names
-        assert str(in_lab_recipe.id) in {
-            row['id'] for row in (response.data.get('results') or response.data)
-        }
+        assert str(in_lab_recipe.id) in {row['id'] for row in response.data}
 
     def test_inactive_recipes_filtered_by_default(self, manager_client, department):
         eq_type = EquipmentTypeFactory()
@@ -123,7 +123,7 @@ class TestLabScopedRecipeList:
         # Act
         response = manager_client.get('/api/equipments/recipes/')
         # Assert
-        names = {row['name'] for row in (response.data.get('results') or response.data)}
+        names = {row['name'] for row in response.data}
         assert names == {'active'}
 
     def test_filter_by_equipment_type(self, manager_client, department):
@@ -138,7 +138,7 @@ class TestLabScopedRecipeList:
             f'/api/equipments/recipes/?equipment_type={wanted_type.id}',
         )
         # Assert
-        names = {row['name'] for row in (response.data.get('results') or response.data)}
+        names = {row['name'] for row in response.data}
         assert names == {'wanted'}
 
 

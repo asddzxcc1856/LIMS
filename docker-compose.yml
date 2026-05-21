@@ -69,7 +69,14 @@ services:
     # Single-line sh -c so YAML folding doesn't sneak in literal newlines that
     # `sh` then mis-reads as separate commands. `exec` hands PID 1 to gunicorn
     # so `docker stop` sends SIGTERM straight to the worker (fast clean shutdown).
-    command: sh -c "python manage.py migrate --noinput && exec gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --access-logfile - --error-logfile -"
+    # 1. migrate           — ensures all schema + recipe / enrich migrations are applied
+    # 2. seed_demo_accounts — provisions the canonical demo roster + specialties
+    # 3. enrich_recipe_parameters — defensive top-up (no-op if already enriched)
+    # 4. seed_demo_orders   — primes a few orders / sub-LOTs so the dispatcher
+    #                         queue is non-empty on first login. Safe to call
+    #                         on every restart: the command refuses to wipe
+    #                         existing orders unless --force is passed.
+    command: sh -c "python manage.py migrate --noinput && python manage.py seed_demo_accounts && python manage.py enrich_recipe_parameters && python manage.py seed_demo_orders && exec gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 4 --access-logfile - --error-logfile -"
 
   # ── Celery Worker (no critical-path job uses it yet — kept hot) ─
   celery:

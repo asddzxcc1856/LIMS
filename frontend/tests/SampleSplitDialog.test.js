@@ -125,19 +125,22 @@ describe('SampleSplitDialog', () => {
     await wrapper.setProps({ open: true })
     await flushPromises()
 
+    // Beforeach seeds 1 existing sample at 3 wafers; new splits must
+    // sum to 22 so the grand total lands on the 25-wafer cap. Blank
+    // rows are still filtered.
     wrapper.vm.splits = [
-      { sub_code: ' A ', wafer_count: 4, notes: 'lead' },
+      { sub_code: ' A ', wafer_count: 12, notes: 'lead' },
       { sub_code: '', wafer_count: 1, notes: 'blank-row-should-be-filtered' },
-      { sub_code: 'B', wafer_count: '2', notes: '' },
+      { sub_code: 'B', wafer_count: '10', notes: '' },
     ]
     // Act
     await wrapper.vm.confirm()
     await flushPromises()
-    // Assert — second row dropped, sub_code trimmed, wafer_count coerced
+    // Assert — second row dropped, sub_code trimmed, numerics coerced
     expect(splitOrderSamples).toHaveBeenCalledWith('order-1', {
       splits: [
-        { sub_code: 'A', wafer_count: 4, notes: 'lead' },
-        { sub_code: 'B', wafer_count: 2, notes: '' },
+        { sub_code: 'A', wafer_count: 12, notes: 'lead' },
+        { sub_code: 'B', wafer_count: 10, notes: '' },
       ],
     })
     expect(wrapper.emitted('split-saved')).toBeTruthy()
@@ -152,7 +155,10 @@ describe('SampleSplitDialog', () => {
     const wrapper = await mountDialog()
     await wrapper.setProps({ open: true })
     await flushPromises()
-    wrapper.vm.splits = [{ sub_code: 'A', wafer_count: 1, notes: '' }]
+    // Beforeach seeds 1 existing sample at 3 wafers; this row plus
+    // existing must add up to 25 so the cap gate lets the call through
+    // and the backend's "sub_code already used" error can surface.
+    wrapper.vm.splits = [{ sub_code: 'A', wafer_count: 22, notes: '' }]
     // Act
     await wrapper.vm.confirm()
     await flushPromises()

@@ -58,6 +58,49 @@
                 :loading="loadingLots"
                 :not-found-content="lots.length ? undefined : t('createOrder.noLotsAvailable')"
               />
+              <!-- Lock notice — surfaced when the chosen lot is currently
+                   being processed by another order, so the requester knows
+                   why submission is blocked. -->
+              <a-alert
+                v-if="selectedLotIsLocked"
+                type="warning"
+                show-icon
+                style="margin-top: 8px"
+                :message="t('createOrder.lotLockedTitle')"
+                :description="t('createOrder.lotLockedDesc', { orderNo: selectedLotInfo.active_order_no })"
+              />
+              <!-- Historical experiments already run on this lot. Helps the
+                   requester avoid accidentally re-submitting the same
+                   experiment (backend will reject too, but pre-warning UX). -->
+              <a-card
+                v-if="selectedLotInfo && selectedLotInfo.experiments_done.length"
+                size="small"
+                style="margin-top: 8px"
+                :body-style="{ padding: '8px 12px' }"
+              >
+                <div class="lot-history-title">
+                  <HistoryOutlined />&nbsp;{{ t('createOrder.lotHistoryTitle') }}
+                </div>
+                <div class="lot-history-list">
+                  <a-tag
+                    v-for="row in selectedLotInfo.experiments_done"
+                    :key="row.order_no"
+                    :color="row.experiment_id === form.experiment ? 'red' : 'success'"
+                  >
+                    <CheckCircleOutlined />&nbsp;
+                    {{ row.experiment_name }}
+                    <span class="lot-history-meta">· {{ row.order_no }}</span>
+                  </a-tag>
+                </div>
+                <a-alert
+                  v-if="selectedExperimentAlreadyDone"
+                  type="error"
+                  show-icon
+                  style="margin-top: 8px"
+                  :message="t('createOrder.dupExpTitle')"
+                  :description="t('createOrder.dupExpDesc')"
+                />
+              </a-card>
             </a-form-item>
 
             <a-form-item name="is_urgent">
@@ -106,6 +149,7 @@
               type="primary"
               html-type="submit"
               :loading="loading"
+              :disabled="!canSubmit"
               size="large"
             >
               <template #icon><SendOutlined /></template>
@@ -142,10 +186,17 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { SendOutlined } from '@ant-design/icons-vue'
+import {
+  CheckCircleOutlined,
+  HistoryOutlined,
+  SendOutlined,
+} from '@ant-design/icons-vue'
 import { fetchExperiments } from '../../api/equipments'
 import { fetchWaferLots } from '../../api/users'
 import { createOrder } from '../../api/orders'
+import { useLocalizedLabel } from '../../composables/useLocalizedLabel'
+
+const { localized } = useLocalizedLabel()
 
 const { t } = useI18n()
 
@@ -167,42 +218,86 @@ const form = reactive({
 })
 
 const lotOptions = computed(() =>
-  lots.value.map((l) => ({
-    value: l.code,
-    label: l.notes ? `${l.code} — ${l.notes}` : l.code,
-  })),
+  lots.value.map((l) => {
+    // Compose the label so the dropdown lists the lock state + completed
+    // experiment count inline; the requester can see at a glance which
+    // lots are available.
+    const parts = [l.code]
+    if (l.notes) parts.push(`— ${l.notes}`)
+    if (l.is_locked) {
+      parts.push(`· ${t('createOrder.lotOptLocked', { orderNo: l.active_order_no || '' })}`)
+    } else if (l.experiments_done && l.experiments_done.length) {
+      parts.push(`· ${t('createOrder.lotOptDone', { n: l.experiments_done.length })}`)
+    }
+    return {
+      value: l.code,
+      label: parts.join(' '),
+      // Disabled options stay visible in the dropdown so the requester
+      // sees that lot exists and is reserved — they just can't pick it.
+      disabled: l.is_locked,
+    }
+  }),
 )
 
+const selectedLotInfo = computed(() =>
+  lots.value.find((l) => l.code === form.lot_id) || null,
+)
+
+const selectedLotIsLocked = computed(() => !!selectedLotInfo.value?.is_locked)
+
+const selectedExperimentAlreadyDone = computed(() => {
+  if (!selectedLotInfo.value || !form.experiment) return false
+  return selectedLotInfo.value.experiments_done.some(
+    (row) => row.experiment_id === form.experiment,
+  )
+})
+
+const canSubmit = computed(() => {
+  // Submit is allowed iff: experiment + lot picked, lot not locked, and
+  // (lot, experiment) pair not already completed. The backend re-checks
+  // these on the server side; this is just UX pre-warning.
+  if (!form.experiment || !form.lot_id) return false
+  if (selectedLotIsLocked.value) return false
+  if (selectedExperimentAlreadyDone.value) return false
+  return true
+})
+
 const experimentOptions = computed(() =>
-  experiments.value.map((exp) => ({
-    value: exp.id,
-    label: exp.department_name ? `${exp.name} (${exp.department_name})` : exp.name,
-  })),
+  experiments.value.map((exp) => {
+    const displayName = localized(exp)
+    return {
+      value: exp.id,
+      label: exp.department_name ? `${displayName} (${exp.department_name})` : displayName,
+    }
+  }),
 )
 
 const selectedExp = computed(() =>
   experiments.value.find((e) => e.id === form.experiment),
 )
 
+async function refreshLots() {
+  loadingLots.value = true
+  try {
+    const { data } = await fetchWaferLots()
+    lots.value = data.results || data || []
+  } catch {
+    message.error(t('createOrder.loadLotsFailed'))
+  } finally {
+    loadingLots.value = false
+  }
+}
+
 onMounted(async () => {
   loadingExperiments.value = true
-  loadingLots.value = true
-  const [expRes, lotsRes] = await Promise.allSettled([
-    fetchExperiments(),
-    fetchWaferLots(),
-  ])
+  const [expRes] = await Promise.allSettled([fetchExperiments()])
   if (expRes.status === 'fulfilled') {
     experiments.value = expRes.value.data.results || expRes.value.data || []
   } else {
     message.error(t('createOrder.loadExpFailed'))
   }
-  if (lotsRes.status === 'fulfilled') {
-    lots.value = lotsRes.value.data.results || lotsRes.value.data || []
-  } else {
-    message.error(t('createOrder.loadLotsFailed'))
-  }
   loadingExperiments.value = false
-  loadingLots.value = false
+  await refreshLots()
 })
 
 async function handleSubmit() {
@@ -219,6 +314,10 @@ async function handleSubmit() {
     const { data } = await createOrder(payload)
     createdOrderNo.value = data.order_no
     success.value = true
+    // Reload the lot list so the lot we just claimed flips to "locked"
+    // in the dropdown — otherwise "Submit another" would let the user
+    // re-pick a lot the backend will now reject.
+    refreshLots()
     message.success(t('createOrder.successTitle', { orderNo: data.order_no }))
   } catch (e) {
     const data = e.response?.data
@@ -241,6 +340,8 @@ function resetForm() {
   form.remark = ''
   success.value = false
   createdOrderNo.value = null
+  // Re-pull lots so the dropdown immediately reflects the newly-locked lot.
+  refreshLots()
 }
 </script>
 
@@ -257,5 +358,20 @@ function resetForm() {
 }
 .side-card :deep(.ant-card-body) {
   padding: 12px 16px;
+}
+.lot-history-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  margin-bottom: 6px;
+}
+.lot-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lot-history-meta {
+  opacity: 0.7;
+  font-size: 11px;
 }
 </style>

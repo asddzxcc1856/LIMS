@@ -18,3 +18,10 @@ export const fetchCapacityCheck = (experimentId) =>
  */
 export const fetchRecipes = (params = {}) =>
   client.get('/equipments/recipes/', { params })
+
+/**
+ * Manager-only status flip — fires the equipments.signals post_save handler,
+ * which fans out a CRITICAL notification to lab managers (報警系統 happy path).
+ */
+export const patchEquipment = (id, data) =>
+  client.patch(`/equipments/${id}/`, data)

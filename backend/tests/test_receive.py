@@ -57,8 +57,13 @@ class TestReceiveStageService:
 
 @pytest.mark.integration
 class TestReceiveStageAPI:
-    def test_lab_member_can_receive(
-        self, db, member_client, lab_member, department, equipment_type,
+    """接件 is now folded into the manager's 簽核 step; the standalone
+    receive endpoint stays available as a manager-only fallback for the
+    rare case where a stage was created without going through sign-off
+    (e.g. legacy data, admin tools). lab_members no longer have access."""
+
+    def test_manager_can_receive(
+        self, db, manager_client, lab_manager, department, equipment_type,
     ):
         order = OrderFactory(department=department)
         stage = OrderStageFactory(
@@ -66,17 +71,30 @@ class TestReceiveStageAPI:
             equipment_type=equipment_type,
             status=OrderStage.Status.WAITING,
         )
-        # Act
-        response = member_client.post(
+        response = manager_client.post(
             f'/api/orders/stages/{stage.id}/receive/',
             {'notes': 'sample arrived'},
             format='json',
         )
-        # Assert
         assert response.status_code == 200, response.data
         stage.refresh_from_db()
         assert stage.received_at is not None
-        assert stage.received_by_id == lab_member.id
+        assert stage.received_by_id == lab_manager.id
+
+    def test_lab_member_cannot_receive(
+        self, db, member_client, department, equipment_type,
+    ):
+        order = OrderFactory(department=department)
+        stage = OrderStageFactory(
+            order=order, department=department,
+            equipment_type=equipment_type,
+            status=OrderStage.Status.WAITING,
+        )
+        response = member_client.post(
+            f'/api/orders/stages/{stage.id}/receive/', {}, format='json',
+        )
+        assert response.status_code == 403
+        assert '主管' in response.data['detail']
 
     def test_requester_cannot_receive(
         self, db, employee_client, employee, equipment_type,
@@ -88,33 +106,12 @@ class TestReceiveStageAPI:
             status=OrderStage.Status.WAITING,
         )
         response = employee_client.post(
-            f'/api/orders/stages/{stage.id}/receive/',
-            {},
-            format='json',
+            f'/api/orders/stages/{stage.id}/receive/', {}, format='json',
         )
         assert response.status_code == 403
 
-    def test_other_lab_member_gets_404(
-        self, db, api_client, fab, department, equipment_type,
-    ):
-        from tests.factories import DepartmentFactory
-        outsider = UserFactory(department=DepartmentFactory(fab=fab), role='lab_member')
-        order = OrderFactory(department=department)
-        stage = OrderStageFactory(
-            order=order, department=department,
-            equipment_type=equipment_type,
-            status=OrderStage.Status.WAITING,
-        )
-        from rest_framework_simplejwt.tokens import RefreshToken
-        api_client.credentials(
-            HTTP_AUTHORIZATION=f'Bearer {RefreshToken.for_user(outsider).access_token}',
-        )
-        response = api_client.post(f'/api/orders/stages/{stage.id}/receive/', {}, format='json')
-        # row-level scoping — outside lab → 404
-        assert response.status_code == 404
-
     def test_double_receive_returns_400(
-        self, db, member_client, lab_member, department, equipment_type,
+        self, db, manager_client, department, equipment_type,
     ):
         order = OrderFactory(department=department)
         stage = OrderStageFactory(
@@ -122,30 +119,27 @@ class TestReceiveStageAPI:
             equipment_type=equipment_type,
             status=OrderStage.Status.WAITING,
         )
-        member_client.post(f'/api/orders/stages/{stage.id}/receive/', {}, format='json')
-        response = member_client.post(
+        manager_client.post(f'/api/orders/stages/{stage.id}/receive/', {}, format='json')
+        response = manager_client.post(
             f'/api/orders/stages/{stage.id}/receive/', {}, format='json',
         )
         assert response.status_code == 400
         assert 'already received' in response.data['detail']
 
-    def test_stage_serializer_exposes_received_at(
-        self, db, member_client, lab_member, department, equipment_type,
+    def test_signoff_auto_stamps_received(
+        self, db, lab_manager, department, equipment_type,
     ):
+        """簽核 should now leave the receive fields populated as a
+        side-effect — the lab no longer needs a separate 接件 click."""
         order = OrderFactory(department=department)
         stage = OrderStageFactory(
             order=order, department=department,
             equipment_type=equipment_type,
             status=OrderStage.Status.WAITING,
-            assignee=lab_member,
         )
-        # Receive it then read back via the list endpoint
-        member_client.post(f'/api/orders/stages/{stage.id}/receive/', {}, format='json')
-        response = member_client.get('/api/orders/stages/')
-        # The stage is assigned to the lab_member so it's in scope.
-        assert response.status_code == 200
-        rows = response.data.get('results') or response.data
-        target = next((r for r in rows if r['id'] == str(stage.id)), None)
-        assert target is not None
-        assert target['received_at'] is not None
-        assert target['received_by_username'] == lab_member.username
+        services.sign_off_stage(stage, actor=lab_manager, comment='ok')
+        stage.refresh_from_db()
+        assert stage.received_at is not None
+        assert stage.received_by_id == lab_manager.id
+        # And the audit event was appended.
+        assert stage.events.filter(event_type=StageEvent.EventType.RECEIVE).count() == 1

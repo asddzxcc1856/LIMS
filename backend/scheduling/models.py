@@ -56,9 +56,15 @@ class StageEvent(models.Model):
 
     class EventType(models.TextChoices):
         RECEIVE = 'receive', 'Receive'
+        SPLIT = 'split', 'Split'
+        DISPATCH = 'dispatch', 'Dispatch'
+        SET_PARAMETERS = 'set_parameters', 'Set Parameters'
+        ASSIGN = 'assign', 'Assign'
         LOAD = 'load', 'Load'
         UNLOAD = 'unload', 'Unload'
         ABORT = 'abort', 'Abort'
+        # NOTE is the catch-all for free-form audit text that doesn't
+        # match a workflow milestone (telemetry, ad-hoc comments).
         NOTE = 'note', 'Note'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

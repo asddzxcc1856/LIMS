@@ -68,6 +68,32 @@
                 <a-tag v-if="eq.active_order" color="blue" class="order-tag">
                   {{ eq.active_order.order_no }}
                 </a-tag>
+
+                <!-- Manager / superuser only: quick status change.
+                     Flipping to maintenance / pending fans out a CRITICAL
+                     notification via the equipments.signals post_save
+                     handler — the spec's 報警系統 happy path. -->
+                <a-dropdown v-if="canChangeStatus" trigger="click">
+                  <a-button size="small" type="link" @click.stop>
+                    <SettingOutlined />
+                  </a-button>
+                  <template #overlay>
+                    <a-menu @click="(e) => onStatusPick(eq, e.key)">
+                      <a-menu-item key="available">
+                        ✅ {{ statusLabel('available') }}
+                      </a-menu-item>
+                      <a-menu-item key="maintenance">
+                        ⚠ {{ statusLabel('maintenance') }}
+                      </a-menu-item>
+                      <a-menu-item key="pending">
+                        ⏸ {{ statusLabel('pending') }}
+                      </a-menu-item>
+                      <a-menu-item key="inactive">
+                        ⛔ {{ statusLabel('inactive') }}
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
               </div>
             </div>
           </a-card>
@@ -112,20 +138,29 @@ import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
+import { Modal, message } from 'ant-design-vue'
 import {
   CheckCircleOutlined,
   PauseCircleOutlined,
   ReloadOutlined,
+  SettingOutlined,
   SyncOutlined,
   WarningOutlined,
 } from '@ant-design/icons-vue'
-import { fetchStatusMatrix } from '../api/equipments'
+import { fetchStatusMatrix, patchEquipment } from '../api/equipments'
+import { useAuthStore } from '../stores/auth'
+
+const auth = useAuthStore()
 
 const matrix = ref([])
 const loading = ref(false)
 const filter = ref('all')
 const modalOpen = ref(false)
 const selectedEq = ref(null)
+
+const canChangeStatus = computed(
+  () => auth.isManager || auth.isSuperuser,
+)
 
 onMounted(load)
 
@@ -176,6 +211,32 @@ function statusColor(s) {
 
 function formatDate(value) {
   return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—'
+}
+
+function onStatusPick(eq, newStatus) {
+  if (!newStatus || eq.status === newStatus) return
+  const isCritical = newStatus === 'maintenance' || newStatus === 'pending'
+  Modal.confirm({
+    title: t('equipmentDashboard.confirmStatusTitle'),
+    content: t('equipmentDashboard.confirmStatusBody', {
+      code: eq.code,
+      status: statusLabel(newStatus),
+    }),
+    okText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    okButtonProps: isCritical ? { danger: true } : undefined,
+    async onOk() {
+      try {
+        await patchEquipment(eq.id, { status: newStatus })
+        message.success(t('equipmentDashboard.statusUpdated'))
+        await load()
+      } catch (e) {
+        message.error(
+          e?.response?.data?.detail || t('equipmentDashboard.statusFailed'),
+        )
+      }
+    },
+  })
 }
 </script>
 

@@ -85,9 +85,6 @@
           <a-descriptions-item :label="t('orders.laboratory')">
             {{ currentStage.department_name }}
           </a-descriptions-item>
-          <a-descriptions-item :label="t('orders.operator')">
-            {{ currentStage.assignee_name || t('common.notAssigned') }}
-          </a-descriptions-item>
           <a-descriptions-item v-if="currentStage.schedule_start" :label="t('orders.schedule')">
             {{ formatDate(currentStage.schedule_start) }}
             →
@@ -117,27 +114,6 @@
           <h4>{{ t('orders.remark') }}</h4>
           <p v-if="selectedOrder.remark" style="white-space: pre-wrap">{{ selectedOrder.remark }}</p>
           <a-empty v-else :description="t('orders.noRemark')" :image-style="{ height: 40 }" />
-        </div>
-
-        <a-divider />
-
-        <div class="remark-block">
-          <h4>{{ t('orders.samples') }}</h4>
-          <a-spin :spinning="samplesLoading">
-            <a-empty
-              v-if="!samplesLoading && samples.length === 0"
-              :description="t('orders.noSamples')"
-              :image-style="{ height: 40 }"
-            />
-            <a-table
-              v-else
-              :columns="sampleColumns"
-              :data-source="samples"
-              row-key="id"
-              size="small"
-              :pagination="false"
-            />
-          </a-spin>
         </div>
 
         <a-divider />

@@ -9,6 +9,7 @@ import DashboardView from '../views/DashboardView.vue'
 import OrderCreateView from '../views/requester/OrderCreateView.vue'
 import OrderListView from '../views/requester/OrderListView.vue'
 import OrderReviewView from '../views/manager/OrderReviewView.vue'
+import ManagerReportsView from '../views/manager/ManagerReportsView.vue'
 import OrderTasksView from '../views/member/OrderTasksView.vue'
 import EquipmentDashboardView from '../views/EquipmentDashboardView.vue'
 
@@ -44,12 +45,19 @@ const routes = [
     component: OrderReviewView,
     meta: { roles: ['lab_manager', 'superuser'] },
   },
+  {
+    path: '/reports',
+    name: 'ManagerReports',
+    component: ManagerReportsView,
+    meta: { roles: ['lab_manager', 'superuser'] },
+  },
   // Lab Member
   {
     path: '/orders/tasks',
     name: 'LabTasks',
     component: OrderTasksView,
-    meta: { roles: ['lab_member', 'lab_manager', 'superuser'] },
+    // Managers don't have a workflow specialty — Review is their page.
+    meta: { roles: ['lab_member', 'superuser'] },
   },
   // Equipment dashboard — hidden from regular employees / lab members; the
   // requester UI must not surface the underlying machine inventory.

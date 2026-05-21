@@ -14,7 +14,7 @@ from .models import (
 class EquipmentTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = EquipmentType
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'name_en']
 
 
 class EquipmentSerializer(serializers.ModelSerializer):
@@ -48,16 +48,23 @@ class ExperimentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Experiment
-        fields = ['id', 'name', 'remark', 'department', 'department_name']
+        fields = [
+            'id', 'name', 'name_en', 'remark', 'remark_en',
+            'department', 'department_name',
+        ]
 
 
 class RecipeSerializer(serializers.ModelSerializer):
     equipment_type_name = serializers.CharField(source='equipment_type.name', read_only=True)
+    equipment_type_name_en = serializers.CharField(
+        source='equipment_type.name_en', read_only=True, default='',
+    )
 
     class Meta:
         model = Recipe
         fields = [
-            'id', 'name', 'version', 'parameters', 'remark',
+            'id', 'name', 'name_en', 'version', 'parameters',
+            'remark', 'remark_en',
             'is_active',
-            'equipment_type', 'equipment_type_name',
+            'equipment_type', 'equipment_type_name', 'equipment_type_name_en',
         ]

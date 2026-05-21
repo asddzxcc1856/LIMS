@@ -66,6 +66,22 @@ class User(AbstractUser):
         ACTIVE = 'active', 'Active'
         SUSPENDED = 'suspended', 'Suspended'
 
+    class LabSpecialty(models.TextChoices):
+        """Specialty pinned to a lab_member that gates which workflow
+        step they're allowed to execute. The pipeline is:
+
+            分貨 (COORDINATOR) → 派工 (DISPATCHER) → 設定參數 (ENGINEER)
+            → 機台執行 (OPERATOR — auto-assigned by workload).
+
+        ``NONE`` is the safe default for non-lab_member roles (requesters,
+        managers, sysadmins).
+        """
+        COORDINATOR = 'coord', 'Lot Coordinator (分貨)'
+        DISPATCHER = 'dispatcher', 'Dispatcher (派工)'
+        ENGINEER = 'engineer', 'Process Engineer (設定參數)'
+        OPERATOR = 'operator', 'Tool Operator (機台執行)'
+        NONE = 'none', 'No specialty'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     department = models.ForeignKey(
         Department,
@@ -76,6 +92,14 @@ class User(AbstractUser):
     )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.REGULAR_EMPLOYEE)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    # Workflow specialty — only meaningful when role=lab_member; ignored
+    # otherwise. Drives both the per-step authorization checks and the
+    # _auto_pick_assignee operator-selection pool.
+    lab_specialty = models.CharField(
+        max_length=20,
+        choices=LabSpecialty.choices,
+        default=LabSpecialty.NONE,
+    )
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

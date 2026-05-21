@@ -35,9 +35,10 @@ class TestSignOffStage:
         approval = services.sign_off_stage(
             stage, actor=lab_manager, comment='Looks good, schedule later.',
         )
-        # Assert — stage stays WAITING; approval row exists
+        # Assert — stage now APPROVED (signoff is necessary precondition
+        # for dispatch); approval row records who did it.
         stage.refresh_from_db()
-        assert stage.status == OrderStage.Status.WAITING
+        assert stage.status == OrderStage.Status.APPROVED
         assert approval.decision == Approval.Decision.APPROVED
         assert approval.actor_id == lab_manager.id
         assert approval.comment.startswith('Looks good')
@@ -66,7 +67,9 @@ class TestApproveAndScheduleWritesApproval:
             equipment_type=equipment_type,
             status=OrderStage.Status.WAITING,
         )
-        # Act
+        # Act — combined button on a WAITING stage writes BOTH an
+        # auto-signoff row AND the dispatch row, satisfying the
+        # "signoff is necessary precondition" invariant.
         services.approve_and_schedule_stage(
             stage,
             schedule_start='2026-05-02T10:00:00Z',
@@ -76,9 +79,9 @@ class TestApproveAndScheduleWritesApproval:
         )
         # Assert
         approvals = stage.approvals.all()
-        assert approvals.count() == 1
-        assert approvals.first().decision == Approval.Decision.APPROVED
-        assert approvals.first().actor_id == lab_manager.id
+        assert approvals.count() == 2
+        assert all(a.decision == Approval.Decision.APPROVED for a in approvals)
+        assert all(a.actor_id == lab_manager.id for a in approvals)
 
 
 @pytest.mark.unit
@@ -123,8 +126,8 @@ class TestApprovalsAPI:
         assert response.status_code == 201, response.data
         assert response.data['decision'] == 'approved'
         stage.refresh_from_db()
-        # signoff alone does not move stage out of WAITING
-        assert stage.status == OrderStage.Status.WAITING
+        # signoff flips WAITING → APPROVED (necessary precondition for dispatch)
+        assert stage.status == OrderStage.Status.APPROVED
 
     def test_requester_cannot_signoff(
         self, db, employee_client, employee, equipment_type,

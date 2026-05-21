@@ -148,6 +148,7 @@ import zhTWLocale from 'ant-design-vue/es/locale/zh_TW'
 import enUSLocale from 'ant-design-vue/es/locale/en_US'
 import {
   AppstoreOutlined,
+  BarChartOutlined,
   BulbFilled,
   BulbOutlined,
   CheckCircleOutlined,
@@ -250,11 +251,21 @@ const menuConfig = computed(() => [
     visible: () => auth.isManager,
   },
   {
+    key: 'reports',
+    label: t('nav.reports'),
+    icon: BarChartOutlined,
+    path: '/reports',
+    visible: () => auth.isManager || auth.isSuperuser,
+  },
+  {
     key: 'tasks',
     label: t('nav.tasks'),
     icon: UnorderedListOutlined,
     path: '/orders/tasks',
-    visible: () => auth.isMember,
+    // Workbench tabs are specialty-gated (coord / dispatcher / engineer
+    // / operator). Managers don't have a workflow specialty — they use
+    // the Review page instead. Superuser still gets in for ops/admin.
+    visible: () => auth.role === 'lab_member' || auth.isSuperuser,
   },
   {
     key: 'equipment',

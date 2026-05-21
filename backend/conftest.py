@@ -5,6 +5,7 @@ Conventions:
     * Authenticated clients are pre-baked for every role to keep tests AAA-clean.
 """
 import pytest
+from django.conf import settings
 from rest_framework.test import APIClient
 
 from tests.factories import (
@@ -18,6 +19,11 @@ from tests.factories import (
     SuperUserFactory,
     UserFactory,
 )
+
+# Test suite seeds tiny wafer counts to keep arrange blocks legible;
+# the 25-wafer-per-order cap stays an opt-in flag for tests that
+# explicitly want to exercise it (they re-enable via override_settings).
+settings.LIMS_ENFORCE_WAFER_CAP = False
 
 
 # ── Domain object fixtures ──────────────────────────────────────────────────
@@ -44,7 +50,38 @@ def lab_manager(db, department):
 
 @pytest.fixture
 def lab_member(db, department):
-    return UserFactory(department=department, role='lab_member')
+    # Default the generic ``lab_member`` fixture to a Coordinator since
+    # the most common test action is 分貨 (split). Tests that drive
+    # 派工 / 設定參數 / 指派 should pull from the dedicated fixtures
+    # below — the workflow gate now enforces 各司其職.
+    return UserFactory(
+        department=department, role='lab_member',
+        lab_specialty='coord',
+    )
+
+
+@pytest.fixture
+def lab_dispatcher(db, department):
+    return UserFactory(
+        department=department, role='lab_member',
+        lab_specialty='dispatcher',
+    )
+
+
+@pytest.fixture
+def lab_engineer(db, department):
+    return UserFactory(
+        department=department, role='lab_member',
+        lab_specialty='engineer',
+    )
+
+
+@pytest.fixture
+def lab_operator(db, department):
+    return UserFactory(
+        department=department, role='lab_member',
+        lab_specialty='operator',
+    )
 
 
 @pytest.fixture
@@ -77,6 +114,17 @@ def order_stage(db, order, department, equipment_type):
     return OrderStageFactory(
         order=order, department=department, equipment_type=equipment_type,
     )
+
+
+@pytest.fixture
+def approved_order(db, order, department, equipment_type):
+    """Order with an APPROVED OrderStage — ready for split."""
+    from orders.models import OrderStage
+    OrderStageFactory(
+        order=order, department=department, equipment_type=equipment_type,
+        status=OrderStage.Status.APPROVED,
+    )
+    return order
 
 
 # ── HTTP client fixtures ────────────────────────────────────────────────────

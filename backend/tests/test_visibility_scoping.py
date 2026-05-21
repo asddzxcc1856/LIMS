@@ -52,25 +52,57 @@ class TestOrderListVisibility:
     def test_lab_member_sees_only_orders_with_assigned_stages(
         self, db, member_client, lab_member, equipment_type,
     ):
-        # Arrange — order A has a stage assigned to me, order B has a stage assigned to someone else
-        order_assigned = OrderFactory(department=lab_member.department)
-        OrderStageFactory(
-            order=order_assigned, equipment_type=equipment_type,
-            department=lab_member.department, assignee=lab_member,
-        )
+        # Arrange — lab_member fixture is a coord (specialty=coord).
+        # Coord sees orders in their lab with an APPROVED stage and no
+        # samples yet (待分貨 queue) PLUS orders they personally split.
+        from orders.models import OrderStage, Sample
+        from tests.factories import LabOperatorFactory
 
-        order_unassigned = OrderFactory(department=lab_member.department)
-        other = LabMemberFactory(department=lab_member.department)
+        # A) Approved stage, no samples — should be visible to coord.
+        order_for_split = OrderFactory(department=lab_member.department)
         OrderStageFactory(
-            order=order_unassigned, equipment_type=equipment_type,
-            department=lab_member.department, assignee=other,
+            order=order_for_split, equipment_type=equipment_type,
+            department=lab_member.department,
+            status=OrderStage.Status.APPROVED,
+        )
+        # B) Order in their lab but stage still PENDING — NOT in queue.
+        order_pending = OrderFactory(department=lab_member.department)
+        OrderStageFactory(
+            order=order_pending, equipment_type=equipment_type,
+            department=lab_member.department,
+            status=OrderStage.Status.PENDING,
+        )
+        # C) Order they previously split (sample.created_by = lab_member)
+        # — still visible.
+        order_already_split = OrderFactory(department=lab_member.department)
+        OrderStageFactory(
+            order=order_already_split, equipment_type=equipment_type,
+            department=lab_member.department,
+            status=OrderStage.Status.APPROVED,
+        )
+        Sample.objects.create(
+            order=order_already_split, sub_code='A', wafer_count=1,
+            created_by=lab_member,
+        )
+        # D) Order another operator is assigned — NOT in coord's queue.
+        order_other_operator = OrderFactory(department=lab_member.department)
+        OrderStageFactory(
+            order=order_other_operator, equipment_type=equipment_type,
+            department=lab_member.department,
+            status=OrderStage.Status.IN_PROGRESS,
+        )
+        Sample.objects.create(
+            order=order_other_operator, sub_code='A', wafer_count=1,
+            assignee=LabOperatorFactory(department=lab_member.department),
         )
         # Act
         response = member_client.get('/api/orders/')
         # Assert
         ids = {row['id'] for row in response.data['results']}
-        assert str(order_assigned.id) in ids
-        assert str(order_unassigned.id) not in ids
+        assert str(order_for_split.id) in ids
+        assert str(order_already_split.id) in ids
+        assert str(order_pending.id) not in ids
+        assert str(order_other_operator.id) not in ids
 
     def test_superuser_sees_everything(self, db, superuser_client):
         # Arrange
@@ -80,6 +112,114 @@ class TestOrderListVisibility:
         response = superuser_client.get('/api/orders/')
         # Assert — at minimum the three we just made
         assert response.data['count'] >= 3
+
+
+@pytest.mark.integration
+class TestOrderListVisibilityBySpecialty:
+    """Lab_member's 'Recent Orders' should follow their specialty queue.
+
+    Each test pins a specialty-specific helper and checks that the
+    member sees exactly the orders relevant to their tier.
+    """
+
+    def _auth(self, api_client, user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        api_client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {RefreshToken.for_user(user).access_token}',
+        )
+        return api_client
+
+    def test_coord_sees_orders_waiting_for_split(
+        self, db, api_client, department, equipment_type,
+    ):
+        from orders.models import OrderStage
+        from tests.factories import LabCoordFactory
+        coord = LabCoordFactory(department=department)
+        order = OrderFactory(department=department)
+        OrderStageFactory(
+            order=order, equipment_type=equipment_type,
+            department=department, status=OrderStage.Status.APPROVED,
+        )
+        response = self._auth(api_client, coord).get('/api/orders/')
+        ids = {row['id'] for row in response.data['results']}
+        assert str(order.id) in ids
+
+    def test_dispatcher_sees_orders_with_waiting_samples(
+        self, db, api_client, department, equipment_type,
+    ):
+        from orders.models import OrderStage, Sample
+        from tests.factories import LabDispatcherFactory
+        dispatcher = LabDispatcherFactory(department=department)
+        order = OrderFactory(department=department)
+        OrderStageFactory(
+            order=order, equipment_type=equipment_type,
+            department=department, status=OrderStage.Status.APPROVED,
+        )
+        Sample.objects.create(
+            order=order, sub_code='A', wafer_count=1,
+            status=Sample.Status.WAITING,
+        )
+        # Another order with no waiting samples — not in queue
+        order_other = OrderFactory(department=department)
+        OrderStageFactory(
+            order=order_other, equipment_type=equipment_type,
+            department=department, status=OrderStage.Status.APPROVED,
+        )
+        response = self._auth(api_client, dispatcher).get('/api/orders/')
+        ids = {row['id'] for row in response.data['results']}
+        assert str(order.id) in ids
+        assert str(order_other.id) not in ids
+
+    def test_engineer_sees_orders_with_dispatched_samples(
+        self, db, api_client, department, equipment_type,
+    ):
+        from orders.models import OrderStage, Sample
+        from tests.factories import LabEngineerFactory
+        engineer = LabEngineerFactory(department=department)
+        order = OrderFactory(department=department)
+        OrderStageFactory(
+            order=order, equipment_type=equipment_type,
+            department=department, status=OrderStage.Status.APPROVED,
+        )
+        Sample.objects.create(
+            order=order, sub_code='A', wafer_count=1,
+            status=Sample.Status.DISPATCHED,
+        )
+        response = self._auth(api_client, engineer).get('/api/orders/')
+        ids = {row['id'] for row in response.data['results']}
+        assert str(order.id) in ids
+
+    def test_operator_sees_only_orders_assigned_to_them(
+        self, db, api_client, department, equipment_type,
+    ):
+        from orders.models import OrderStage, Sample
+        from tests.factories import LabOperatorFactory
+        op_mine = LabOperatorFactory(department=department)
+        op_other = LabOperatorFactory(department=department)
+
+        order_mine = OrderFactory(department=department)
+        OrderStageFactory(
+            order=order_mine, equipment_type=equipment_type,
+            department=department, status=OrderStage.Status.IN_PROGRESS,
+        )
+        Sample.objects.create(
+            order=order_mine, sub_code='A', wafer_count=1,
+            status=Sample.Status.READY, assignee=op_mine,
+        )
+        # Order assigned to another operator
+        order_other = OrderFactory(department=department)
+        OrderStageFactory(
+            order=order_other, equipment_type=equipment_type,
+            department=department, status=OrderStage.Status.IN_PROGRESS,
+        )
+        Sample.objects.create(
+            order=order_other, sub_code='A', wafer_count=1,
+            status=Sample.Status.READY, assignee=op_other,
+        )
+        response = self._auth(api_client, op_mine).get('/api/orders/')
+        ids = {row['id'] for row in response.data['results']}
+        assert str(order_mine.id) in ids
+        assert str(order_other.id) not in ids
 
 
 @pytest.mark.integration
@@ -119,6 +259,32 @@ class TestOrderDetailVisibility:
         response = manager_client.get(f'/api/orders/{foreign_order.id}/')
         # Assert
         assert response.status_code == 404
+
+    def test_requester_sees_lab_but_not_operator_identity(
+        self, db, employee_client, employee, equipment_type, department,
+    ):
+        """The requester (regular_employee) sees department / experiment
+        / status / schedule on their own order, but operator identity
+        is scrubbed — they only need to know which lab is handling it,
+        not which person."""
+        from tests.factories import LabOperatorFactory
+        operator = LabOperatorFactory(department=department)
+        order = OrderFactory(user=employee, department=department)
+        OrderStageFactory(
+            order=order, step_order=1,
+            equipment_type=equipment_type, department=department,
+            status='in_progress', assignee=operator,
+        )
+        response = employee_client.get(f'/api/orders/{order.id}/')
+        assert response.status_code == 200
+        # Lab visible.
+        assert response.data['department_name'] == department.name
+        # Operator identity scrubbed.
+        assert response.data.get('assignee_name') in (None, '')
+        for stage in response.data['stages']:
+            assert stage.get('assignee_name') in (None, '')
+            assert stage.get('received_by_username') in (None, '')
+            assert stage.get('parameters_set_by_username') in (None, '')
 
     def test_detail_response_includes_relay_stages(
         self, db, employee_client, employee, equipment_type,

@@ -121,8 +121,9 @@ class OrderStage(models.Model):
     """Specific step in an order's relay pipeline."""
 
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'   # Waiting for prev stage
-        WAITING = 'waiting', 'Waiting'   # Waiting for manager to assign
+        PENDING = 'pending', 'Pending'      # Waiting for prev stage (legacy)
+        WAITING = 'waiting', 'Waiting'      # Submitted, awaiting manager sign-off
+        APPROVED = 'approved', 'Approved'   # Signed off, awaiting dispatch
         IN_PROGRESS = 'in_progress', 'In Progress'
         DONE = 'done', 'Done'
         REJECTED = 'rejected', 'Rejected'
@@ -163,6 +164,25 @@ class OrderStage(models.Model):
         related_name='stages',
         help_text='Recipe used on the picked equipment for this stage.',
     )
+    # 參數設定: process engineer can override specific recipe knobs at
+    # dispatch time. Keys MUST exist in ``recipe.parameters`` — validation
+    # in :func:`orders.services._attach_recipe_overrides` enforces the
+    # "受控 recipe 範圍內" constraint so an operator can never invent a
+    # parameter name that the machine recipe doesn't define.
+    parameter_overrides = models.JSONField(default=dict, blank=True)
+    # Explicit ack flag for the 參數設定 step. The lab personnel who tunes
+    # the recipe knobs leaves their fingerprint here so the next member —
+    # the one who clicks 啟動 — sees that the parameters have been signed
+    # off. NULL means the step hasn't been done yet (overrides=={} alone
+    # isn't enough because some recipes have no editable knobs).
+    parameters_set_at = models.DateTimeField(null=True, blank=True)
+    parameters_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stages_parameters_set',
+    )
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
 
     schedule_start = models.DateTimeField(null=True, blank=True)
@@ -194,14 +214,20 @@ class Sample(models.Model):
 
     分貨系統 (WIP split): lab personnel can break a submitted lot into
     multiple sub-groups so different recipes can run in parallel without
-    forcing the requester to file separate orders. Each Sample is a leaf
-    or interior node in a small tree — ``parent_sample`` lets the system
-    track a re-split when the lab decides to subdivide further.
-
-    The model deliberately stays light: no FK to OrderStage so the same
-    Sample can travel through multiple dispatches; downstream events
-    record which Sample they handled via :class:`scheduling.StageEvent`.
+    forcing the requester to file separate orders. Each Sample is the
+    unit of dispatch — every sub-lot independently picks its own
+    machine, recipe, parameter set, assignee, and tracks its own load /
+    unload events. The OrderStage row stays as the umbrella record but
+    no longer owns these per-sub-lot details.
     """
+
+    class Status(models.TextChoices):
+        WAITING = 'waiting', '等待派工'
+        DISPATCHED = 'dispatched', '已派工 待設定參數'
+        PARAMS_SET = 'params_set', '已設參數 待指派'
+        READY = 'ready', '已指派 待上貨'
+        RUNNING = 'running', '進行中'
+        DONE = 'done', '完成'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(
@@ -222,6 +248,70 @@ class Sample(models.Model):
         blank=True,
         related_name='children',
     )
+    # 派工排程: explicit execution order so lab personnel can dictate
+    # which WIP runs first when multiple samples share an order. Smaller
+    # number first; ties broken by created_at.
+    execution_order = models.PositiveIntegerField(default=0)
+
+    # ── Per-sample dispatch state ────────────────────────────────
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.WAITING,
+        db_index=True,
+    )
+    equipment = models.ForeignKey(
+        'equipments.Equipment',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sample_dispatches',
+    )
+    # Tracks who hit the 派工 button — used by the rotation rule that
+    # forbids one person owning two consecutive steps on the same sample
+    # (the spec calls this 各司其職 / division of labour).
+    dispatched_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_dispatched',
+    )
+    recipe = models.ForeignKey(
+        'equipments.Recipe',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sample_dispatches',
+    )
+    parameter_overrides = models.JSONField(default=dict, blank=True)
+    parameters_set_at = models.DateTimeField(null=True, blank=True)
+    parameters_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_parameters_set',
+    )
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_assigned',
+        help_text='Lab member responsible for running this sample on its machine.',
+    )
+    schedule_start = models.DateTimeField(null=True, blank=True)
+    schedule_end = models.DateTimeField(null=True, blank=True)
+    loaded_at = models.DateTimeField(null=True, blank=True)
+    loaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_loaded',
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_completed',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -233,10 +323,11 @@ class Sample(models.Model):
 
     class Meta:
         db_table = 'sample'
-        ordering = ['order', 'sub_code']
+        ordering = ['order', 'execution_order', 'sub_code']
         unique_together = ('order', 'sub_code')
         indexes = [
             models.Index(fields=['order', 'sub_code']),
+            models.Index(fields=['order', 'execution_order']),
             models.Index(fields=['parent_sample']),
         ]
 
