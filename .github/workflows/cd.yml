@@ -156,12 +156,27 @@ jobs:
             -n lims-prod \
             --timeout=300s
 
-      - name: Run migrations
+      - name: Run migrations and seed demo data
         run: |
           kubectl exec -n lims-prod \
             deploy/lims-prod-lims-backend \
             -c app -- \
             python manage.py migrate --noinput
+
+          kubectl exec -n lims-prod \
+            deploy/lims-prod-lims-backend \
+            -c app -- \
+            python manage.py seed_demo_accounts
+
+          kubectl exec -n lims-prod \
+            deploy/lims-prod-lims-backend \
+            -c app -- \
+            python manage.py enrich_recipe_parameters
+
+          kubectl exec -n lims-prod \
+            deploy/lims-prod-lims-backend \
+            -c app -- \
+            python manage.py seed_demo_orders
 
       - name: Refresh ArgoCD app
         run: |
