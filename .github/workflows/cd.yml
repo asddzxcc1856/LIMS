@@ -137,8 +137,9 @@ jobs:
 
       - name: Delete backend pod
         run: |
-          kubectl delete pod -n lims-prod \
-          $(kubectl get pod -n lims-prod -o name | grep backend | head -1)
+          kubectl delete \
+          $(kubectl get pod -n lims-prod -o name | grep backend | head -1) \
+          -n lims-prod
 
       # ---------------------------------------------------------
       # Wait rollout complete
