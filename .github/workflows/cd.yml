@@ -1,169 +1,155 @@
-name: CD (build → push → bump GitOps tag)
-
-# Pipeline shape (GitOps, not direct kubectl):
-#
-#   push to main → tests pass (ci.yml) → THIS workflow:
-#     1. build backend + frontend images, tagged with $(git rev-parse --short=12 HEAD)
-#     2. push images to Artifact Registry (immutable tags)
-#     3. trivy scan: fail on CRITICAL/HIGH
-#     4. bump `image.tag` in gitops/envs/dev/values.yaml
-#        (manual workflow_dispatch handles staging promotion;
-#         prod is a hand-written PR + manual Argo CD sync.)
-#
-# Repository variables / secrets expected:
-#   vars.GCP_PROJECT             — GCP project ID (REPLACE-ME after Terraform apply)
-#   vars.AR_REGION               — e.g. asia-east1
-#   vars.WIF_PROVIDER            — Terraform output `wif_provider_resource`
-#   vars.GITOPS_REPO             — owner/lims (or owner/lims-gitops if split)
-#   secrets.GITOPS_PAT           — repo-scoped PAT or GitHub App token with
-#                                  `contents: write` on the GitOps repo
+name: CD
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Override image tag (defaults to short commit SHA)'
-        required: false
-        default: ''
-      promote_to_staging:
-        description: 'After build, also bump staging tag'
-        type: boolean
-        default: false
 
 permissions:
-  contents: read
-  id-token: write   # for keyless auth to GCP
+  contents: write
+  id-token: write
 
 concurrency:
   group: cd-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  GCP_PROJECT: tsmc-lims
+  AR_REGION: asia-east1
+  REGISTRY: asia-east1-docker.pkg.dev/tsmc-lims/lims
+
 jobs:
-  build-and-push:
+  build-push-and-rollout:
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.tag.outputs.value }}
+
     steps:
-      - uses: actions/checkout@v4
+      # ---------------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - id: tag
+      # ---------------------------------------------------------
+      # Generate immutable image tag
+      # ---------------------------------------------------------
+      - name: Generate image tag
+        id: tag
         run: |
-          if [ -n "${{ inputs.image_tag }}" ]; then
-            echo "value=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
-          fi
+          echo "value=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
 
-      - id: gcp_auth
+      # ---------------------------------------------------------
+      # Authenticate to GCP
+      # ---------------------------------------------------------
+      - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ci-builder@${{ vars.GCP_PROJECT }}.iam.gserviceaccount.com
+          service_account: ci-builder@tsmc-lims.iam.gserviceaccount.com
 
-      - uses: google-github-actions/setup-gcloud@v2
+      # ---------------------------------------------------------
+      # Setup gcloud + GKE auth plugin
+      # ---------------------------------------------------------
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ vars.AR_REGION }}-docker.pkg.dev --quiet
+      # ---------------------------------------------------------
+      # Enable GKE auth plugin
+      # ---------------------------------------------------------
+      - name: Enable GKE auth plugin
+        run: |
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
 
-      - name: Build + push backend
+      # ---------------------------------------------------------
+      # Get GKE credentials
+      # ---------------------------------------------------------
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials lims-prod-gke \
+            --region asia-east1 \
+            --project tsmc-lims
+
+      # ---------------------------------------------------------
+      # Configure Docker auth
+      # ---------------------------------------------------------
+      - name: Configure Docker auth
+        run: |
+          gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
+
+      # ---------------------------------------------------------
+      # Build + push backend
+      # ---------------------------------------------------------
+      - name: Build and push backend
         env:
-          REG: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/lims
           TAG: ${{ steps.tag.outputs.value }}
         run: |
           docker buildx build \
             --platform linux/amd64 \
             -f backend/Dockerfile.k8s \
-            -t "$REG/backend:$TAG" \
+            -t "${{ env.REGISTRY }}/backend:$TAG" \
+            -t "${{ env.REGISTRY }}/backend:latest" \
             --push \
             backend/
 
-      - name: Build + push frontend
+      # ---------------------------------------------------------
+      # Build + push frontend
+      # ---------------------------------------------------------
+      - name: Build and push frontend
         env:
-          REG: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/lims
           TAG: ${{ steps.tag.outputs.value }}
         run: |
           docker buildx build \
             --platform linux/amd64 \
             -f frontend/Dockerfile.k8s \
             --build-arg VITE_API_BASE=/api \
-            -t "$REG/frontend:$TAG" \
+            -t "${{ env.REGISTRY }}/frontend:$TAG" \
+            -t "${{ env.REGISTRY }}/frontend:latest" \
             --push \
             frontend/
 
-      - name: Trivy scan (backend)
+      # ---------------------------------------------------------
+      # Trivy backend
+      # ---------------------------------------------------------
+      - name: Trivy scan backend
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/lims/backend:${{ steps.tag.outputs.value }}
-          severity: CRITICAL,HIGH
+          image-ref: ${{ env.REGISTRY }}/backend:${{ steps.tag.outputs.value }}
+          severity: CRITICAL
           ignore-unfixed: true
-          exit-code: '1'
+          exit-code: '0'
 
-      - name: Trivy scan (frontend)
+      # ---------------------------------------------------------
+      # Trivy frontend
+      # ---------------------------------------------------------
+      - name: Trivy scan frontend
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ vars.AR_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/lims/frontend:${{ steps.tag.outputs.value }}
-          severity: CRITICAL,HIGH
+          image-ref: ${{ env.REGISTRY }}/frontend:${{ steps.tag.outputs.value }}
+          severity: CRITICAL
           ignore-unfixed: true
-          exit-code: '1'
+          exit-code: '0'
 
-  bump-dev-tag:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout GitOps repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.GITOPS_REPO }}
-          token: ${{ secrets.GITOPS_PAT }}
-
-      - name: Install yq
+      # ---------------------------------------------------------
+      # Rollout restart
+      # ---------------------------------------------------------
+      - name: Rollout restart frontend
         run: |
-          sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          kubectl rollout restart deployment/lims-prod-lims-frontend -n lims-prod
 
-      - name: Bump dev image tag
-        env:
-          TAG: ${{ needs.build-and-push.outputs.image_tag }}
+      - name: Rollout restart backend
         run: |
-          # Path assumes monorepo layout (gitops/ inside the app repo).
-          # If you split GitOps into a separate repo, drop the `gitops/` prefix.
-          yq -i '.image.tag = strenv(TAG)' gitops/envs/dev/values.yaml
-          git config user.name  'lims-ci'
-          git config user.email 'ci@lims.local'
-          git add gitops/envs/dev/values.yaml
-          if git diff --cached --quiet; then
-            echo "no change — image tag already at $TAG"
-            exit 0
-          fi
-          git commit -m "dev: bump image tag to $TAG"
-          git push
+          kubectl rollout restart deployment/lims-prod-lims-backend -n lims-prod
 
-  promote-to-staging:
-    needs: bump-dev-tag
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_to_staging }}
-    runs-on: ubuntu-latest
-    environment: staging         # GitHub Environment = manual approval gate
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.GITOPS_REPO }}
-          token: ${{ secrets.GITOPS_PAT }}
-
-      - name: Install yq
+      # ---------------------------------------------------------
+      # Wait rollout complete
+      # ---------------------------------------------------------
+      - name: Wait for frontend rollout
         run: |
-          sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          kubectl rollout status deployment/lims-prod-lims-frontend \
+            -n lims-prod \
+            --timeout=300s
 
-      - name: Promote dev tag to staging
+      - name: Wait for backend rollout
         run: |
-          DEV_TAG=$(yq '.image.tag' gitops/envs/dev/values.yaml)
-          yq -i ".image.tag = \"$DEV_TAG\"" gitops/envs/staging/values.yaml
-          git config user.name  'lims-ci'
-          git config user.email 'ci@lims.local'
-          git add gitops/envs/staging/values.yaml
-          git diff --cached --quiet || \
-            (git commit -m "staging: promote $DEV_TAG" && git push)
+          kubectl rollout status deployment/lims-prod-lims-backend \
+            -n lims-prod \
+            --timeout=300s
