@@ -1,0 +1,2101 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      checksum/config: 7129cecfe430040cfe169806c7fc3630326548a480f2d9e063e73a1d74a3d78b
+    creationTimestamp: "2026-05-18T07:45:08Z"
+    generateName: lims-prod-lims-backend-5dbb6f7b79-
+    generation: 1
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+      pod-template-hash: 5dbb6f7b79
+      topology.kubernetes.io/region: asia-east1
+      topology.kubernetes.io/zone: asia-east1-b
+    name: lims-prod-lims-backend-5dbb6f7b79-krwnw
+    namespace: lims-prod
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: lims-prod-lims-backend-5dbb6f7b79
+      uid: 4d72e2ed-5e6a-4183-af45-61d0c05d6f3d
+    resourceVersion: "1779090455129199001"
+    uid: 23df0553-f8db-4931-aebc-654b4014ddef
+  spec:
+    containers:
+    - args:
+      - backend.wsgi:application
+      - --bind
+      - 0.0.0.0:8000
+      - --workers
+      - "1"
+      - --timeout
+      - "120"
+      - --graceful-timeout
+      - "25"
+      - --access-logfile
+      - '-'
+      - --error-logfile
+      - '-'
+      command:
+      - gunicorn
+      envFrom:
+      - configMapRef:
+          name: lims-prod-lims-config
+      - secretRef:
+          name: lims-prod-lims-secrets
+      image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+      imagePullPolicy: Always
+      lifecycle:
+        preStop:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - sleep 5
+      livenessProbe:
+        failureThreshold: 5
+        httpGet:
+          path: /healthz
+          port: http
+          scheme: HTTP
+        periodSeconds: 30
+        successThreshold: 1
+        timeoutSeconds: 3
+      name: app
+      ports:
+      - containerPort: 8000
+        name: http
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        httpGet:
+          path: /readyz
+          port: http
+          scheme: HTTP
+        periodSeconds: 10
+        successThreshold: 1
+        timeoutSeconds: 3
+      resources:
+        limits:
+          cpu: "1"
+          ephemeral-storage: 1Gi
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          ephemeral-storage: 1Gi
+          memory: 512Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 10001
+      startupProbe:
+        failureThreshold: 30
+        httpGet:
+          path: /healthz
+          port: http
+          scheme: HTTP
+        periodSeconds: 5
+        successThreshold: 1
+        timeoutSeconds: 5
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /tmp
+        name: tmp
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-pv8c4
+        readOnly: true
+    - args:
+      - --private-ip
+      - --port=3306
+      - --health-check
+      - --credentials-file=/secrets/credentials.json
+      - tsmc-lims:asia-east1:lims-prod-mysql
+      image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+      imagePullPolicy: IfNotPresent
+      name: cloud-sql-proxy
+      resources:
+        limits:
+          cpu: 500m
+          ephemeral-storage: 1Gi
+          memory: 256Mi
+        requests:
+          cpu: 50m
+          ephemeral-storage: 1Gi
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65532
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /secrets
+        name: cloudsql-instance-credentials
+        readOnly: true
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-pv8c4
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: gk3-lims-prod-gke-nap-1glwq6zc-ea7728c8-b7rh
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    readinessGates:
+    - conditionType: cloud.google.com/load-balancer-neg-ready
+    restartPolicy: Always
+    schedulerName: gke.io/optimize-utilization-scheduler
+    securityContext:
+      fsGroup: 10001
+      runAsGroup: 10001
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
+    serviceAccount: lims-prod-lims
+    serviceAccountName: lims-prod-lims
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoSchedule
+      key: kubernetes.io/arch
+      operator: Equal
+      value: amd64
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - emptyDir: {}
+      name: tmp
+    - name: cloudsql-instance-credentials
+      secret:
+        defaultMode: 420
+        secretName: cloudsql-instance-credentials
+    - name: kube-api-access-pv8c4
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: null
+      message: 'Pod has become Healthy in NEG "Key{\"k8s1-50e33098-lims-prod-lims-prod-lims-backend-8000-4682a0d1\",
+        zone: \"asia-east1-b\"}" attached to BackendService "Key{\"k8s1-50e33098-lims-prod-lims-prod-lims-backend-8000-4682a0d1\"}".
+        Marking condition "cloud.google.com/load-balancer-neg-ready" to True.'
+      reason: LoadBalancerNegReady
+      status: "True"
+      type: cloud.google.com/load-balancer-neg-ready
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T07:45:11Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodReadyToStartContainers
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T07:45:08Z"
+      observedGeneration: 1
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T07:45:17Z"
+      observedGeneration: 1
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T07:45:14Z"
+      observedGeneration: 1
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T07:45:08Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodScheduled
+    - lastProbeTime: null
+      lastTransitionTime: null
+      message: Image gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2 is backed
+        by image streaming by 100.0% (12/12 layers).
+      status: "True"
+      type: ImageStreaming
+    containerStatuses:
+    - allocatedResources:
+        cpu: 250m
+        ephemeral-storage: 1Gi
+        memory: 512Mi
+      containerID: containerd://5487f8ab3b40e53b8295523fb0e7e38b05e64866a7bc30a67de4180519702bd5
+      image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+      imageID: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend@sha256:ac2ae8874123ce3bd359ae19744df6b4ad0be773da348c20e49e70828187ef3c
+      lastState: {}
+      name: app
+      ready: true
+      resources:
+        limits:
+          cpu: "1"
+          ephemeral-storage: 1Gi
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          ephemeral-storage: 1Gi
+          memory: 512Mi
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2026-05-18T07:45:10Z"
+      user:
+        linux:
+          gid: 10001
+          supplementalGroups:
+          - 10001
+          uid: 10001
+      volumeMounts:
+      - mountPath: /tmp
+        name: tmp
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-pv8c4
+        readOnly: true
+        recursiveReadOnly: Disabled
+    - allocatedResources:
+        cpu: 50m
+        ephemeral-storage: 1Gi
+        memory: 64Mi
+      containerID: containerd://4c04eca63c2244a10f9849f4d03432b093df2c074714df794f41e4fc573bafdf
+      image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+      imageID: gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:d3f195cb893f2abb2ce8f28a4d3eee9b5589750711b4fbf67c78ce215c520e96
+      lastState: {}
+      name: cloud-sql-proxy
+      ready: true
+      resources:
+        limits:
+          cpu: 500m
+          ephemeral-storage: 1Gi
+          memory: 256Mi
+        requests:
+          cpu: 50m
+          ephemeral-storage: 1Gi
+          memory: 64Mi
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2026-05-18T07:45:10Z"
+      user:
+        linux:
+          gid: 10001
+          supplementalGroups:
+          - 10001
+          uid: 65532
+      volumeMounts:
+      - mountPath: /secrets
+        name: cloudsql-instance-credentials
+        readOnly: true
+        recursiveReadOnly: Disabled
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-pv8c4
+        readOnly: true
+        recursiveReadOnly: Disabled
+    hostIP: 10.10.0.4
+    hostIPs:
+    - ip: 10.10.0.4
+    observedGeneration: 1
+    phase: Running
+    podIP: 10.20.0.98
+    podIPs:
+    - ip: 10.20.0.98
+    qosClass: Burstable
+    startTime: "2026-05-18T07:45:08Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      checksum/config: 7129cecfe430040cfe169806c7fc3630326548a480f2d9e063e73a1d74a3d78b
+    creationTimestamp: "2026-05-18T08:20:01Z"
+    generateName: lims-prod-lims-frontend-5bf888b78b-
+    generation: 1
+    labels:
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+      pod-template-hash: 5bf888b78b
+      topology.kubernetes.io/region: asia-east1
+      topology.kubernetes.io/zone: asia-east1-b
+    name: lims-prod-lims-frontend-5bf888b78b-kx9db
+    namespace: lims-prod
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: lims-prod-lims-frontend-5bf888b78b
+      uid: 4c821fac-f0ee-49fb-aea3-0fa6411d10cf
+    resourceVersion: "1779092407435647001"
+    uid: 473740e5-2f19-4025-b5dd-b837fa0e6b11
+  spec:
+    containers:
+    - image: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend:latest
+      imagePullPolicy: Always
+      livenessProbe:
+        failureThreshold: 3
+        httpGet:
+          path: /healthz
+          port: http
+          scheme: HTTP
+        periodSeconds: 30
+        successThreshold: 1
+        timeoutSeconds: 1
+      name: nginx
+      ports:
+      - containerPort: 8080
+        name: http
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        httpGet:
+          path: /readyz
+          port: http
+          scheme: HTTP
+        periodSeconds: 10
+        successThreshold: 1
+        timeoutSeconds: 1
+      resources:
+        limits:
+          cpu: 200m
+          ephemeral-storage: 1Gi
+          memory: 128Mi
+        requests:
+          cpu: 50m
+          ephemeral-storage: 1Gi
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 10001
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/cache/nginx
+        name: cache
+      - mountPath: /var/run/nginx
+        name: pidfile
+      - mountPath: /tmp
+        name: tmp
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-z6rqs
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: gk3-lims-prod-gke-pool-1-20d31b0b-p5vf
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    readinessGates:
+    - conditionType: cloud.google.com/load-balancer-neg-ready
+    restartPolicy: Always
+    schedulerName: gke.io/optimize-utilization-scheduler
+    securityContext:
+      fsGroup: 10001
+      runAsGroup: 10001
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoSchedule
+      key: kubernetes.io/arch
+      operator: Equal
+      value: amd64
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - emptyDir: {}
+      name: cache
+    - emptyDir: {}
+      name: pidfile
+    - emptyDir: {}
+      name: tmp
+    - name: kube-api-access-z6rqs
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: null
+      message: 'Pod is in NEG "Key{\"k8s1-50e33098-lims-prod-lims-prod-lims-frontend-8080-c2fe29e2\",
+        zone: \"asia-east1-b\"}". NEG is not attached to any BackendService with health
+        checking. Marking condition "cloud.google.com/load-balancer-neg-ready" to
+        True.'
+      reason: LoadBalancerNegWithoutHealthCheck
+      status: "True"
+      type: cloud.google.com/load-balancer-neg-ready
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:20:04Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodReadyToStartContainers
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:20:01Z"
+      observedGeneration: 1
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:20:07Z"
+      observedGeneration: 1
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:20:04Z"
+      observedGeneration: 1
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:20:01Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - allocatedResources:
+        cpu: 50m
+        ephemeral-storage: 1Gi
+        memory: 64Mi
+      containerID: containerd://3f3e8f02e5afeb21c3e28411d81b2e160abc92e578e59185d23d985bd732f1ac
+      image: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend:latest
+      imageID: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend@sha256:1659ce78e49f8357d00a517c71ab9a39ae1389b2de046869adcd8e539d4df61e
+      lastState: {}
+      name: nginx
+      ready: true
+      resources:
+        limits:
+          cpu: 200m
+          ephemeral-storage: 1Gi
+          memory: 128Mi
+        requests:
+          cpu: 50m
+          ephemeral-storage: 1Gi
+          memory: 64Mi
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2026-05-18T08:20:04Z"
+      user:
+        linux:
+          gid: 10001
+          supplementalGroups:
+          - 10001
+          uid: 10001
+      volumeMounts:
+      - mountPath: /var/cache/nginx
+        name: cache
+      - mountPath: /var/run/nginx
+        name: pidfile
+      - mountPath: /tmp
+        name: tmp
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-z6rqs
+        readOnly: true
+        recursiveReadOnly: Disabled
+    hostIP: 10.10.0.3
+    hostIPs:
+    - ip: 10.10.0.3
+    observedGeneration: 1
+    phase: Running
+    podIP: 10.20.0.26
+    podIPs:
+    - ip: 10.20.0.26
+    qosClass: Burstable
+    startTime: "2026-05-18T08:20:01Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    creationTimestamp: "2026-05-18T08:19:47Z"
+    generateName: lims-prod-lims-migrate-
+    generation: 1
+    labels:
+      app.kubernetes.io/component: migrate
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      batch.kubernetes.io/controller-uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+      batch.kubernetes.io/job-name: lims-prod-lims-migrate
+      controller-uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+      helm.sh/chart: lims-0.1.0
+      job-name: lims-prod-lims-migrate
+      lims.environment: prod
+      topology.kubernetes.io/region: asia-east1
+      topology.kubernetes.io/zone: asia-east1-b
+    name: lims-prod-lims-migrate-bxmlx
+    namespace: lims-prod
+    ownerReferences:
+    - apiVersion: batch/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Job
+      name: lims-prod-lims-migrate
+      uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+    resourceVersion: "1779092467977247018"
+    uid: 121b6b5c-0505-4bf8-9a79-bccb29ebff35
+  spec:
+    containers:
+    - command:
+      - /bin/sh
+      - -c
+      - |
+        python manage.py migrate --noinput
+        python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9091/quitquitquit')"
+      envFrom:
+      - configMapRef:
+          name: lims-prod-lims-config
+      - secretRef:
+          name: lims-prod-lims-secrets
+      image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+      imagePullPolicy: Always
+      name: migrate
+      resources:
+        limits:
+          cpu: 500m
+          ephemeral-storage: 1Gi
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          ephemeral-storage: 1Gi
+          memory: 256Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 10001
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /tmp
+        name: tmp
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-hgl4f
+        readOnly: true
+    - args:
+      - --private-ip
+      - --port=3306
+      - --quitquitquit
+      - --credentials-file=/secrets/credentials.json
+      - tsmc-lims:asia-east1:lims-prod-mysql
+      image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+      imagePullPolicy: IfNotPresent
+      name: cloud-sql-proxy
+      resources:
+        limits:
+          cpu: 500m
+          ephemeral-storage: 1Gi
+          memory: 256Mi
+        requests:
+          cpu: 50m
+          ephemeral-storage: 1Gi
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65532
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /secrets
+        name: cloudsql-instance-credentials
+        readOnly: true
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-hgl4f
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: gk3-lims-prod-gke-nap-1glwq6zc-ea7728c8-b7rh
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Never
+    schedulerName: gke.io/optimize-utilization-scheduler
+    securityContext:
+      fsGroup: 10001
+      runAsGroup: 10001
+      runAsNonRoot: true
+      runAsUser: 10001
+      seccompProfile:
+        type: RuntimeDefault
+    serviceAccount: lims-prod-lims
+    serviceAccountName: lims-prod-lims
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoSchedule
+      key: kubernetes.io/arch
+      operator: Equal
+      value: amd64
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - emptyDir: {}
+      name: tmp
+    - name: cloudsql-instance-credentials
+      secret:
+        defaultMode: 420
+        secretName: cloudsql-instance-credentials
+    - name: kube-api-access-hgl4f
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:20:00Z"
+      observedGeneration: 1
+      status: "False"
+      type: PodReadyToStartContainers
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:19:47Z"
+      observedGeneration: 1
+      reason: PodCompleted
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:19:58Z"
+      observedGeneration: 1
+      reason: PodCompleted
+      status: "False"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:19:58Z"
+      observedGeneration: 1
+      reason: PodCompleted
+      status: "False"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2026-05-18T08:19:47Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodScheduled
+    - lastProbeTime: null
+      lastTransitionTime: null
+      message: Image gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2 is backed
+        by image streaming by 100.0% (12/12 layers).
+      status: "True"
+      type: ImageStreaming
+    containerStatuses:
+    - allocatedResources:
+        cpu: 50m
+        ephemeral-storage: 1Gi
+        memory: 64Mi
+      containerID: containerd://b3f67aa037453bcde843eeaaa574325b1b3d7628ae5bd52b130406b978328c22
+      image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+      imageID: gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:d3f195cb893f2abb2ce8f28a4d3eee9b5589750711b4fbf67c78ce215c520e96
+      lastState: {}
+      name: cloud-sql-proxy
+      ready: false
+      resources:
+        limits:
+          cpu: 500m
+          ephemeral-storage: 1Gi
+          memory: 256Mi
+        requests:
+          cpu: 50m
+          ephemeral-storage: 1Gi
+          memory: 64Mi
+      restartCount: 0
+      started: false
+      state:
+        terminated:
+          containerID: containerd://b3f67aa037453bcde843eeaaa574325b1b3d7628ae5bd52b130406b978328c22
+          exitCode: 0
+          finishedAt: "2026-05-18T08:19:57Z"
+          reason: Completed
+          startedAt: "2026-05-18T08:19:49Z"
+      user:
+        linux:
+          gid: 10001
+          supplementalGroups:
+          - 10001
+          uid: 65532
+      volumeMounts:
+      - mountPath: /secrets
+        name: cloudsql-instance-credentials
+        readOnly: true
+        recursiveReadOnly: Disabled
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-hgl4f
+        readOnly: true
+        recursiveReadOnly: Disabled
+    - allocatedResources:
+        cpu: 100m
+        ephemeral-storage: 1Gi
+        memory: 256Mi
+      containerID: containerd://e1d10e54e2ff53c0d26d14008dd8a50fbd200d8581a359723f123943886bf59b
+      image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+      imageID: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend@sha256:ac2ae8874123ce3bd359ae19744df6b4ad0be773da348c20e49e70828187ef3c
+      lastState: {}
+      name: migrate
+      ready: false
+      resources:
+        limits:
+          cpu: 500m
+          ephemeral-storage: 1Gi
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          ephemeral-storage: 1Gi
+          memory: 256Mi
+      restartCount: 0
+      started: false
+      state:
+        terminated:
+          containerID: containerd://e1d10e54e2ff53c0d26d14008dd8a50fbd200d8581a359723f123943886bf59b
+          exitCode: 0
+          finishedAt: "2026-05-18T08:19:57Z"
+          reason: Completed
+          startedAt: "2026-05-18T08:19:48Z"
+      user:
+        linux:
+          gid: 10001
+          supplementalGroups:
+          - 10001
+          uid: 10001
+      volumeMounts:
+      - mountPath: /tmp
+        name: tmp
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-hgl4f
+        readOnly: true
+        recursiveReadOnly: Disabled
+    hostIP: 10.10.0.4
+    hostIPs:
+    - ip: 10.10.0.4
+    observedGeneration: 1
+    phase: Succeeded
+    podIP: 10.20.0.105
+    podIPs:
+    - ip: 10.20.0.105
+    qosClass: Burstable
+    startTime: "2026-05-18T08:19:47Z"
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:/Service:lims-prod/lims-prod-lims-backend
+      cloud.google.com/backend-config: '{"default": "lims-prod-lims-backend"}'
+      cloud.google.com/neg: '{"ingress": true}'
+      cloud.google.com/neg-status: '{"network_endpoint_groups":{"8000":"k8s1-50e33098-lims-prod-lims-prod-lims-backend-8000-4682a0d1"},"zones":["asia-east1-b"]}'
+    creationTimestamp: "2026-05-16T13:18:17Z"
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-backend
+    namespace: lims-prod
+    resourceVersion: "1779004179789551007"
+    uid: 256d39b9-919b-4528-bbd0-8894e82b7932
+  spec:
+    clusterIP: 10.30.9.194
+    clusterIPs:
+    - 10.30.9.194
+    internalTrafficPolicy: Cluster
+    ipFamilies:
+    - IPv4
+    ipFamilyPolicy: SingleStack
+    ports:
+    - name: http
+      port: 8000
+      protocol: TCP
+      targetPort: http
+    selector:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/name: lims
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:/Service:lims-prod/lims-prod-lims-frontend
+      cloud.google.com/neg: '{"ingress": true}'
+      cloud.google.com/neg-status: '{"network_endpoint_groups":{"8080":"k8s1-50e33098-lims-prod-lims-prod-lims-frontend-8080-c2fe29e2"},"zones":["asia-east1-b"]}'
+    creationTimestamp: "2026-05-16T13:18:17Z"
+    labels:
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-frontend
+    namespace: lims-prod
+    resourceVersion: "1779004179867951016"
+    uid: c7a3abbb-6f66-45c4-a38b-500a66b20391
+  spec:
+    clusterIP: 10.30.12.59
+    clusterIPs:
+    - 10.30.12.59
+    internalTrafficPolicy: Cluster
+    ipFamilies:
+    - IPv4
+    ipFamilyPolicy: SingleStack
+    ports:
+    - name: http
+      port: 8080
+      protocol: TCP
+      targetPort: http
+    selector:
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/name: lims
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:apps/Deployment:lims-prod/lims-prod-lims-backend
+      autopilot.gke.io/resource-adjustment: '{"input":{"containers":[{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"},"name":"app"},{"limits":{"cpu":"500m","memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"},"name":"cloud-sql-proxy"}]},"output":{"containers":[{"limits":{"cpu":"1","ephemeral-storage":"1Gi","memory":"1Gi"},"requests":{"cpu":"250m","ephemeral-storage":"1Gi","memory":"512Mi"},"name":"app"},{"limits":{"cpu":"500m","ephemeral-storage":"1Gi","memory":"256Mi"},"requests":{"cpu":"50m","ephemeral-storage":"1Gi","memory":"64Mi"},"name":"cloud-sql-proxy"}]},"computeClassAtAdmission":"Default","modified":true}'
+      autopilot.gke.io/warden-version: 35.26.0-gke.3
+      deployment.kubernetes.io/revision: "1"
+    creationTimestamp: "2026-05-18T07:45:07Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-backend
+    namespace: lims-prod
+    resourceVersion: "1779090317815407023"
+    uid: 09546d30-16d0-49d9-a9eb-47968be0702e
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: lims-prod
+        app.kubernetes.io/name: lims
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+    template:
+      metadata:
+        annotations:
+          checksum/config: 7129cecfe430040cfe169806c7fc3630326548a480f2d9e063e73a1d74a3d78b
+        labels:
+          app.kubernetes.io/component: backend
+          app.kubernetes.io/instance: lims-prod
+          app.kubernetes.io/managed-by: Helm
+          app.kubernetes.io/name: lims
+          app.kubernetes.io/version: 0.1.0
+          helm.sh/chart: lims-0.1.0
+          lims.environment: prod
+      spec:
+        containers:
+        - args:
+          - backend.wsgi:application
+          - --bind
+          - 0.0.0.0:8000
+          - --workers
+          - "1"
+          - --timeout
+          - "120"
+          - --graceful-timeout
+          - "25"
+          - --access-logfile
+          - '-'
+          - --error-logfile
+          - '-'
+          command:
+          - gunicorn
+          envFrom:
+          - configMapRef:
+              name: lims-prod-lims-config
+          - secretRef:
+              name: lims-prod-lims-secrets
+          image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/sh
+                - -c
+                - sleep 5
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 3
+          name: app
+          ports:
+          - containerPort: 8000
+            name: http
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: "1"
+              ephemeral-storage: 1Gi
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              ephemeral-storage: 1Gi
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 5
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+        - args:
+          - --private-ip
+          - --port=3306
+          - --health-check
+          - --credentials-file=/secrets/credentials.json
+          - tsmc-lims:asia-east1:lims-prod-mysql
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+          imagePullPolicy: IfNotPresent
+          name: cloud-sql-proxy
+          resources:
+            limits:
+              cpu: 500m
+              ephemeral-storage: 1Gi
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              ephemeral-storage: 1Gi
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /secrets
+            name: cloudsql-instance-credentials
+            readOnly: true
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext:
+          fsGroup: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        serviceAccount: lims-prod-lims
+        serviceAccountName: lims-prod-lims
+        terminationGracePeriodSeconds: 30
+        tolerations:
+        - effect: NoSchedule
+          key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+        volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: cloudsql-instance-credentials
+          secret:
+            defaultMode: 420
+            secretName: cloudsql-instance-credentials
+  status:
+    availableReplicas: 1
+    conditions:
+    - lastTransitionTime: "2026-05-18T07:45:17Z"
+      lastUpdateTime: "2026-05-18T07:45:17Z"
+      message: Deployment has minimum availability.
+      reason: MinimumReplicasAvailable
+      status: "True"
+      type: Available
+    - lastTransitionTime: "2026-05-18T07:45:07Z"
+      lastUpdateTime: "2026-05-18T07:45:17Z"
+      message: ReplicaSet "lims-prod-lims-backend-5dbb6f7b79" has successfully progressed.
+      reason: NewReplicaSetAvailable
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    terminatingReplicas: 0
+    updatedReplicas: 1
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:apps/Deployment:lims-prod/lims-prod-lims-frontend
+      autopilot.gke.io/resource-adjustment: '{"input":{"containers":[{"limits":{"cpu":"200m","memory":"128Mi"},"requests":{"cpu":"50m","memory":"64Mi"},"name":"nginx"}]},"output":{"containers":[{"limits":{"cpu":"200m","ephemeral-storage":"1Gi","memory":"128Mi"},"requests":{"cpu":"50m","ephemeral-storage":"1Gi","memory":"64Mi"},"name":"nginx"}]},"computeClassAtAdmission":"Default","modified":true}'
+      autopilot.gke.io/warden-version: 35.26.0-gke.3
+      deployment.kubernetes.io/revision: "1"
+    creationTimestamp: "2026-05-18T08:20:01Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-frontend
+    namespace: lims-prod
+    resourceVersion: "1779092407499471022"
+    uid: 5fe6ded2-760d-4298-90ae-405042688e63
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/instance: lims-prod
+        app.kubernetes.io/name: lims
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+      type: RollingUpdate
+    template:
+      metadata:
+        annotations:
+          checksum/config: 7129cecfe430040cfe169806c7fc3630326548a480f2d9e063e73a1d74a3d78b
+        labels:
+          app.kubernetes.io/component: frontend
+          app.kubernetes.io/instance: lims-prod
+          app.kubernetes.io/managed-by: Helm
+          app.kubernetes.io/name: lims
+          app.kubernetes.io/version: 0.1.0
+          helm.sh/chart: lims-0.1.0
+          lims.environment: prod
+      spec:
+        containers:
+        - image: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend:latest
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: nginx
+          ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 200m
+              ephemeral-storage: 1Gi
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              ephemeral-storage: 1Gi
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /var/cache/nginx
+            name: cache
+          - mountPath: /var/run/nginx
+            name: pidfile
+          - mountPath: /tmp
+            name: tmp
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext:
+          fsGroup: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        terminationGracePeriodSeconds: 30
+        tolerations:
+        - effect: NoSchedule
+          key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+        volumes:
+        - emptyDir: {}
+          name: cache
+        - emptyDir: {}
+          name: pidfile
+        - emptyDir: {}
+          name: tmp
+  status:
+    availableReplicas: 1
+    conditions:
+    - lastTransitionTime: "2026-05-18T08:20:07Z"
+      lastUpdateTime: "2026-05-18T08:20:07Z"
+      message: Deployment has minimum availability.
+      reason: MinimumReplicasAvailable
+      status: "True"
+      type: Available
+    - lastTransitionTime: "2026-05-18T08:20:01Z"
+      lastUpdateTime: "2026-05-18T08:20:07Z"
+      message: ReplicaSet "lims-prod-lims-frontend-5bf888b78b" has successfully progressed.
+      reason: NewReplicaSetAvailable
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    terminatingReplicas: 0
+    updatedReplicas: 1
+- apiVersion: apps/v1
+  kind: ReplicaSet
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:apps/Deployment:lims-prod/lims-prod-lims-backend
+      autopilot.gke.io/resource-adjustment: '{"input":{"containers":[{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"},"name":"app"},{"limits":{"cpu":"500m","memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"},"name":"cloud-sql-proxy"}]},"output":{"containers":[{"limits":{"cpu":"1","ephemeral-storage":"1Gi","memory":"1Gi"},"requests":{"cpu":"250m","ephemeral-storage":"1Gi","memory":"512Mi"},"name":"app"},{"limits":{"cpu":"500m","ephemeral-storage":"1Gi","memory":"256Mi"},"requests":{"cpu":"50m","ephemeral-storage":"1Gi","memory":"64Mi"},"name":"cloud-sql-proxy"}]},"computeClassAtAdmission":"Default","modified":true}'
+      autopilot.gke.io/warden-version: 35.26.0-gke.3
+      deployment.kubernetes.io/desired-replicas: "1"
+      deployment.kubernetes.io/max-replicas: "2"
+      deployment.kubernetes.io/revision: "1"
+    creationTimestamp: "2026-05-18T07:45:07Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+      pod-template-hash: 5dbb6f7b79
+    name: lims-prod-lims-backend-5dbb6f7b79
+    namespace: lims-prod
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Deployment
+      name: lims-prod-lims-backend
+      uid: 09546d30-16d0-49d9-a9eb-47968be0702e
+    resourceVersion: "1779090317786735021"
+    uid: 4d72e2ed-5e6a-4183-af45-61d0c05d6f3d
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/instance: lims-prod
+        app.kubernetes.io/name: lims
+        pod-template-hash: 5dbb6f7b79
+    template:
+      metadata:
+        annotations:
+          checksum/config: 7129cecfe430040cfe169806c7fc3630326548a480f2d9e063e73a1d74a3d78b
+        labels:
+          app.kubernetes.io/component: backend
+          app.kubernetes.io/instance: lims-prod
+          app.kubernetes.io/managed-by: Helm
+          app.kubernetes.io/name: lims
+          app.kubernetes.io/version: 0.1.0
+          helm.sh/chart: lims-0.1.0
+          lims.environment: prod
+          pod-template-hash: 5dbb6f7b79
+      spec:
+        containers:
+        - args:
+          - backend.wsgi:application
+          - --bind
+          - 0.0.0.0:8000
+          - --workers
+          - "1"
+          - --timeout
+          - "120"
+          - --graceful-timeout
+          - "25"
+          - --access-logfile
+          - '-'
+          - --error-logfile
+          - '-'
+          command:
+          - gunicorn
+          envFrom:
+          - configMapRef:
+              name: lims-prod-lims-config
+          - secretRef:
+              name: lims-prod-lims-secrets
+          image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+          imagePullPolicy: Always
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/sh
+                - -c
+                - sleep 5
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 3
+          name: app
+          ports:
+          - containerPort: 8000
+            name: http
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: "1"
+              ephemeral-storage: 1Gi
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              ephemeral-storage: 1Gi
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 5
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+        - args:
+          - --private-ip
+          - --port=3306
+          - --health-check
+          - --credentials-file=/secrets/credentials.json
+          - tsmc-lims:asia-east1:lims-prod-mysql
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+          imagePullPolicy: IfNotPresent
+          name: cloud-sql-proxy
+          resources:
+            limits:
+              cpu: 500m
+              ephemeral-storage: 1Gi
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              ephemeral-storage: 1Gi
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /secrets
+            name: cloudsql-instance-credentials
+            readOnly: true
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext:
+          fsGroup: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        serviceAccount: lims-prod-lims
+        serviceAccountName: lims-prod-lims
+        terminationGracePeriodSeconds: 30
+        tolerations:
+        - effect: NoSchedule
+          key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+        volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: cloudsql-instance-credentials
+          secret:
+            defaultMode: 420
+            secretName: cloudsql-instance-credentials
+  status:
+    availableReplicas: 1
+    fullyLabeledReplicas: 1
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    terminatingReplicas: 0
+- apiVersion: apps/v1
+  kind: ReplicaSet
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:apps/Deployment:lims-prod/lims-prod-lims-frontend
+      autopilot.gke.io/resource-adjustment: '{"input":{"containers":[{"limits":{"cpu":"200m","memory":"128Mi"},"requests":{"cpu":"50m","memory":"64Mi"},"name":"nginx"}]},"output":{"containers":[{"limits":{"cpu":"200m","ephemeral-storage":"1Gi","memory":"128Mi"},"requests":{"cpu":"50m","ephemeral-storage":"1Gi","memory":"64Mi"},"name":"nginx"}]},"computeClassAtAdmission":"Default","modified":true}'
+      autopilot.gke.io/warden-version: 35.26.0-gke.3
+      deployment.kubernetes.io/desired-replicas: "1"
+      deployment.kubernetes.io/max-replicas: "2"
+      deployment.kubernetes.io/revision: "1"
+    creationTimestamp: "2026-05-18T08:20:01Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+      pod-template-hash: 5bf888b78b
+    name: lims-prod-lims-frontend-5bf888b78b
+    namespace: lims-prod
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Deployment
+      name: lims-prod-lims-frontend
+      uid: 5fe6ded2-760d-4298-90ae-405042688e63
+    resourceVersion: "1779092407467423001"
+    uid: 4c821fac-f0ee-49fb-aea3-0fa6411d10cf
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/instance: lims-prod
+        app.kubernetes.io/name: lims
+        pod-template-hash: 5bf888b78b
+    template:
+      metadata:
+        annotations:
+          checksum/config: 7129cecfe430040cfe169806c7fc3630326548a480f2d9e063e73a1d74a3d78b
+        labels:
+          app.kubernetes.io/component: frontend
+          app.kubernetes.io/instance: lims-prod
+          app.kubernetes.io/managed-by: Helm
+          app.kubernetes.io/name: lims
+          app.kubernetes.io/version: 0.1.0
+          helm.sh/chart: lims-0.1.0
+          lims.environment: prod
+          pod-template-hash: 5bf888b78b
+      spec:
+        containers:
+        - image: asia-east1-docker.pkg.dev/tsmc-lims/lims/frontend:latest
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: HTTP
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: nginx
+          ports:
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              cpu: 200m
+              ephemeral-storage: 1Gi
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              ephemeral-storage: 1Gi
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /var/cache/nginx
+            name: cache
+          - mountPath: /var/run/nginx
+            name: pidfile
+          - mountPath: /tmp
+            name: tmp
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext:
+          fsGroup: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        terminationGracePeriodSeconds: 30
+        tolerations:
+        - effect: NoSchedule
+          key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+        volumes:
+        - emptyDir: {}
+          name: cache
+        - emptyDir: {}
+          name: pidfile
+        - emptyDir: {}
+          name: tmp
+  status:
+    availableReplicas: 1
+    fullyLabeledReplicas: 1
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    terminatingReplicas: 0
+- apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:autoscaling/HorizontalPodAutoscaler:lims-prod/lims-prod-lims-backend
+    creationTimestamp: "2026-05-16T13:18:17Z"
+    labels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-backend
+    namespace: lims-prod
+    resourceVersion: "1779092478271135012"
+    uid: 453c81a1-cca7-4461-8a0c-e72c4dea3455
+  spec:
+    behavior:
+      scaleDown:
+        policies:
+        - periodSeconds: 15
+          type: Percent
+          value: 100
+        selectPolicy: Max
+        stabilizationWindowSeconds: 300
+      scaleUp:
+        policies:
+        - periodSeconds: 15
+          type: Pods
+          value: 4
+        - periodSeconds: 15
+          type: Percent
+          value: 100
+        selectPolicy: Max
+        stabilizationWindowSeconds: 30
+    maxReplicas: 2
+    metrics:
+    - resource:
+        name: cpu
+        target:
+          averageUtilization: 75
+          type: Utilization
+      type: Resource
+    minReplicas: 1
+    scaleTargetRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: lims-prod-lims-backend
+  status:
+    conditions:
+    - lastTransitionTime: "2026-05-17T17:57:53Z"
+      message: recommended size matches current size
+      reason: ReadyForNewScale
+      status: "True"
+      type: AbleToScale
+    - lastTransitionTime: "2026-05-18T07:45:28Z"
+      message: the HPA was able to successfully calculate a replica count from cpu
+        resource utilization (percentage of request)
+      reason: ValidMetricFound
+      status: "True"
+      type: ScalingActive
+    - lastTransitionTime: "2026-05-16T13:18:32Z"
+      message: the desired count is within the acceptable range
+      reason: DesiredWithinRange
+      status: "False"
+      type: ScalingLimited
+    currentMetrics:
+    - resource:
+        current:
+          averageUtilization: 5
+          averageValue: 14m
+          value: 14m
+        name: cpu
+      type: Resource
+    currentReplicas: 1
+    desiredReplicas: 1
+- apiVersion: batch/v1
+  kind: Job
+  metadata:
+    annotations:
+      argocd.argoproj.io/hook: Sync
+      argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+      argocd.argoproj.io/sync-wave: "-5"
+      argocd.argoproj.io/tracking-id: lims-prod:batch/Job:lims-prod/lims-prod-lims-migrate
+      autopilot.gke.io/resource-adjustment: '{"input":{"containers":[{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"256Mi"},"name":"migrate"},{"limits":{"cpu":"500m","memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"},"name":"cloud-sql-proxy"}]},"output":{"containers":[{"limits":{"cpu":"500m","ephemeral-storage":"1Gi","memory":"512Mi"},"requests":{"cpu":"100m","ephemeral-storage":"1Gi","memory":"256Mi"},"name":"migrate"},{"limits":{"cpu":"500m","ephemeral-storage":"1Gi","memory":"256Mi"},"requests":{"cpu":"50m","ephemeral-storage":"1Gi","memory":"64Mi"},"name":"cloud-sql-proxy"}]},"computeClassAtAdmission":"Default","modified":true}'
+      autopilot.gke.io/warden-version: 35.26.0-gke.3
+    creationTimestamp: "2026-05-18T08:19:47Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: migrate
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-migrate
+    namespace: lims-prod
+    resourceVersion: "1779092401395007017"
+    uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+  spec:
+    backoffLimit: 0
+    completionMode: NonIndexed
+    completions: 1
+    manualSelector: false
+    parallelism: 1
+    podReplacementPolicy: TerminatingOrFailed
+    selector:
+      matchLabels:
+        batch.kubernetes.io/controller-uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+    suspend: false
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/component: migrate
+          app.kubernetes.io/instance: lims-prod
+          app.kubernetes.io/managed-by: Helm
+          app.kubernetes.io/name: lims
+          app.kubernetes.io/version: 0.1.0
+          batch.kubernetes.io/controller-uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+          batch.kubernetes.io/job-name: lims-prod-lims-migrate
+          controller-uid: 4169c7a1-700b-4c56-9359-9cbd1e1a0b1c
+          helm.sh/chart: lims-0.1.0
+          job-name: lims-prod-lims-migrate
+          lims.environment: prod
+      spec:
+        containers:
+        - command:
+          - /bin/sh
+          - -c
+          - |
+            python manage.py migrate --noinput
+            python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9091/quitquitquit')"
+          envFrom:
+          - configMapRef:
+              name: lims-prod-lims-config
+          - secretRef:
+              name: lims-prod-lims-secrets
+          image: asia-east1-docker.pkg.dev/tsmc-lims/lims/backend:latest
+          imagePullPolicy: Always
+          name: migrate
+          resources:
+            limits:
+              cpu: 500m
+              ephemeral-storage: 1Gi
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /tmp
+            name: tmp
+        - args:
+          - --private-ip
+          - --port=3306
+          - --quitquitquit
+          - --credentials-file=/secrets/credentials.json
+          - tsmc-lims:asia-east1:lims-prod-mysql
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+          imagePullPolicy: IfNotPresent
+          name: cloud-sql-proxy
+          resources:
+            limits:
+              cpu: 500m
+              ephemeral-storage: 1Gi
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              ephemeral-storage: 1Gi
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /secrets
+            name: cloudsql-instance-credentials
+            readOnly: true
+        dnsPolicy: ClusterFirst
+        restartPolicy: Never
+        schedulerName: default-scheduler
+        securityContext:
+          fsGroup: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        serviceAccount: lims-prod-lims
+        serviceAccountName: lims-prod-lims
+        terminationGracePeriodSeconds: 30
+        tolerations:
+        - effect: NoSchedule
+          key: kubernetes.io/arch
+          operator: Equal
+          value: amd64
+        volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: cloudsql-instance-credentials
+          secret:
+            defaultMode: 420
+            secretName: cloudsql-instance-credentials
+    ttlSecondsAfterFinished: 600
+  status:
+    completionTime: "2026-05-18T08:20:00Z"
+    conditions:
+    - lastProbeTime: "2026-05-18T08:20:00Z"
+      lastTransitionTime: "2026-05-18T08:20:00Z"
+      message: Reached expected number of succeeded pods
+      reason: CompletionsReached
+      status: "True"
+      type: SuccessCriteriaMet
+    - lastProbeTime: "2026-05-18T08:20:00Z"
+      lastTransitionTime: "2026-05-18T08:20:00Z"
+      message: Reached expected number of succeeded pods
+      reason: CompletionsReached
+      status: "True"
+      type: Complete
+    ready: 0
+    startTime: "2026-05-18T08:19:47Z"
+    succeeded: 1
+    terminating: 0
+    uncountedTerminatedPods: {}
+- apiVersion: v1
+  data:
+    ca.crt: |
+      -----BEGIN CERTIFICATE-----
+      MIIELTCCApWgAwIBAgIRAPZO9Ko2okrjsp/rxcbBKYwwDQYJKoZIhvcNAQELBQAw
+      LzEtMCsGA1UEAxMkNmEzMTkxN2MtZTJlZi00M2EzLWJmYjgtMDU4NDVkM2Q2YTg0
+      MCAXDTI2MDUxNDE3MjQ0NloYDzIwNTYwNTA2MTgyNDQ2WjAvMS0wKwYDVQQDEyQ2
+      YTMxOTE3Yy1lMmVmLTQzYTMtYmZiOC0wNTg0NWQzZDZhODQwggGiMA0GCSqGSIb3
+      DQEBAQUAA4IBjwAwggGKAoIBgQCuuZp7pQNJlhit1lFLPuoA5FWnOVUdlFU8aBnV
+      eoaURg/IT7W4zes77p+2XRFQy16n06RrQIRLzRd98ZtrxsXVS5R8J4I5QxPY9yRd
+      dm01DvLApdh9NKA07ZXAsSK28aZjQHh2Nuw0JOlGsEL/0mab4A7J9XdMeWXxPZX5
+      yrnXLv61FiZUniolaUS+KIuT1OYtOJpscLA3i2vOeshhJGwmgma5FuyOQLaYkjnc
+      7Aav2/cdESUEXc5JarHVTaHSLYIwCKCIM9/0hIUfscKoUC9h3FdGvK4YrVSo/giL
+      kuzMHGQy3P7gsHH/svc8gJfeCn9gX0jYLMICK6zytIoQ2KM44QT+qQUjPPuXTk7/
+      fznoCrMyVlwTdEO+c3GrFn3G2wu7xSS6P3Xp08HDE0UaGbS6LcXV/pgSpLxSSQMc
+      yPqXrSljt5f236qGkafXronwROr8qOvqq2GUR6zCkSRM6HEPpWXby1XiTpSnYBiw
+      MyVMyQqoGT0U3vUzGfqz00OUK1cCAwEAAaNCMEAwDgYDVR0PAQH/BAQDAgIEMA8G
+      A1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFBZsj7XWyFCml7QRmCTR4cBvZ9ycMA0G
+      CSqGSIb3DQEBCwUAA4IBgQBqWU459MeQLgdAt8yj2sZ/lurZaG5t6kI0jM9jg7VN
+      oLJ+y9tmYk+Kga2IViZNcVssikoKPXBFZq6JeCnhZ5PULtDIigs+Ay4IvcTPTvGn
+      94yOfGqO/VZHvpaZcaORql0rxZHojYUUMh94jq0L6gdKtf2m5wTNU6AxFI5BvR+h
+      XPLM+jmz7YrTKo7yvYDO0dMKyky7AWg6X2OLbKhzH5VdR39mpqdqfBVu/Kxe0hYh
+      18nHuMrx9iyRvX8b7uMmTo24yNfbRIW5eGXui7dmrjEg/j4NicAc1geZmjH68n5A
+      aJb2Gk8O/RdcugLIzrj3CnJ8Cai2YMKUgTsp9nVVZzbIQhJ4AFLTVDAdI6F8+n/Q
+      RCCglDzzEj6/zjgkPWREetew7zaDCxyfeDL3Ea3hfjCh7hBAfI5ekPDfhb0rBi3i
+      tkDzrCznFlj/1TZNK/a0raIeaJK3RNM1lSfUjYxL+Bcw/lf08buV5CXdWUEkVKPx
+      gn0a9MQefceplvgcgC4nEs4=
+      -----END CERTIFICATE-----
+  kind: ConfigMap
+  metadata:
+    annotations:
+      kubernetes.io/description: Contains a CA bundle that can be used to verify the
+        kube-apiserver when using internal endpoints such as the internal service
+        IP or kubernetes.default.svc. No other usage is guaranteed across distributions
+        of Kubernetes clusters.
+    creationTimestamp: "2026-05-15T17:24:15Z"
+    name: kube-root-ca.crt
+    namespace: lims-prod
+    resourceVersion: "1778865855558335009"
+    uid: 44d13a33-29b0-4dc9-b880-e3b185e3b769
+- apiVersion: v1
+  data:
+    CELERY_BROKER_URL: redis://placeholder:6379/0
+    CORS_ALLOWED_ORIGINS: https://lims-jack.duckdns.org
+    CSRF_TRUSTED_ORIGINS: https://lims-jack.duckdns.org
+    DB_ENGINE: mysql
+    DB_HOST: 127.0.0.1
+    DB_NAME: lab_booking
+    DB_PORT: "3306"
+    DB_USER: lims_app
+    DJANGO_ALLOWED_HOSTS: '*'
+    DJANGO_DEBUG: "False"
+    DJANGO_LOG_LEVEL: INFO
+    DJANGO_PRODUCTION: "True"
+    GUNICORN_WORKERS: "1"
+    REDIS_URL: redis://placeholder:6379/0
+    SEED_DEMO_DATA: "True"
+    SENTRY_ENVIRONMENT: prod
+  kind: ConfigMap
+  metadata:
+    annotations:
+      argocd.argoproj.io/sync-wave: "-10"
+      argocd.argoproj.io/tracking-id: lims-prod:/ConfigMap:lims-prod/lims-prod-lims-config
+    creationTimestamp: "2026-05-15T17:24:16Z"
+    labels:
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims-config
+    namespace: lims-prod
+    resourceVersion: "1779003273265023012"
+    uid: b8c12e65-6fb0-4b78-b67d-c95cc50ea836
+- apiVersion: v1
+  data:
+    credentials.json: ewogICJhY2NvdW50IjogIiIsCiAgImNsaWVudF9pZCI6ICI3NjQwODYwNTE4NTAtNnFyNHA2Z3BpNmhuNTA2cHQ4ZWp1cTgzZGkzNDFodXIuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLAogICJjbGllbnRfc2VjcmV0IjogImQtRkw5NVExOXE3TVFtRnBkN2hIRDBUeSIsCiAgInF1b3RhX3Byb2plY3RfaWQiOiAidHNtYy1saW1zIiwKICAicmVmcmVzaF90b2tlbiI6ICIxLy8wZWNlS25fTk5UN1FoQ2dZSUFSQUFHQTRTTndGLUw5SXJTRzVpSkhVT3dGYUFzWFNoZ2wyNDd0RERWX0ozY0U5Tm9SX2lrZy1WWWFDbGF6ODM1ckF6R0g2eHR5ckVWS0NNYnZnIiwKICAidHlwZSI6ICJhdXRob3JpemVkX3VzZXIiLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0=
+  kind: Secret
+  metadata:
+    creationTimestamp: "2026-05-16T19:23:38Z"
+    name: cloudsql-instance-credentials
+    namespace: lims-prod
+    resourceVersion: "1778959418492607020"
+    uid: ddf69248-9d96-4afe-b484-a938c911c540
+  type: Opaque
+- apiVersion: v1
+  data:
+    DB_PASSWORD: WWFCZThXYVNlZmctMFp1V3ZDd2I2SVkxTXVIdXpMYjFGX2R6MFgtaTZaZwo=
+    DJANGO_SECRET_KEY: TUM0R0xLQlFxTTFadmllWmpjSml6N0JCczdnRzVNNFhpTTJzUkFrcDJRTnFDSl90Z0pFMFVUaUt2MHAzNE9Oek5lVQo=
+    LIMS_ADMIN_PASSWORD: Q2hhbmdlTWVfMjAyNlwhQWRtaW4=
+    REDIS_AUTH: NTc4MmQwZTYtNmNiZC00OGNjLWJhNTktOGNhMzUwNjdhZjk5
+    REDIS_URL: cmVkaXNzOi8vOjU3ODJkMGU2LTZjYmQtNDhjYy1iYTU5LThjYTM1MDY3YWY5OUAxMC4xOTQuMC4zOjYzNzgvMA==
+    SENTRY_DSN: aHR0cHM6Ly9leGFtcGxlUHVibGljS2V5QG8wLmluZ2VzdC5zZW50cnkuaW8vMA==
+  kind: Secret
+  metadata:
+    annotations:
+      argocd.argoproj.io/sync-wave: "-10"
+      argocd.argoproj.io/tracking-id: lims-prod:external-secrets.io/ExternalSecret:lims-prod/lims-prod-lims-secrets
+      reconcile.external-secrets.io/data-hash: ee37e2264262c7d5eeff9a9d52f3f74f0ef889ca4647bb8ea16521c0
+    creationTimestamp: "2026-05-17T17:20:18Z"
+    labels:
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+      reconcile.external-secrets.io/created-by: 2e86ae55a249b60a6bd041fc6ce43e4e1b221dd6882d103a25d749b7
+      reconcile.external-secrets.io/managed: "true"
+    name: lims-prod-lims-secrets
+    namespace: lims-prod
+    ownerReferences:
+    - apiVersion: external-secrets.io/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ExternalSecret
+      name: lims-prod-lims-secrets
+      uid: 5bcaf3f4-f1ec-4bfc-a97f-13ea37349d7c
+    resourceVersion: "1779038418594495015"
+    uid: f875d14d-a291-4869-a231-deca1a292532
+  type: Opaque
+- apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    annotations:
+      argocd.argoproj.io/tracking-id: lims-prod:networking.k8s.io/Ingress:lims-prod/lims-prod-lims
+      ingress.gcp.kubernetes.io/pre-shared-cert: mcrt-186d8ad1-d1a9-4803-be0c-f1937215c0ba
+      ingress.kubernetes.io/backends: '{"k8s1-50e33098-kube-system-default-http-backend-80-77f010d1":"HEALTHY","k8s1-50e33098-lims-prod-lims-prod-lims-backend-8000-4682a0d1":"HEALTHY","k8s1-50e33098-lims-prod-lims-prod-lims-frontend-8080-c2fe29e2":"HEALTHY"}'
+      ingress.kubernetes.io/forwarding-rule: k8s2-fr-35725mlx-lims-prod-lims-prod-lims-odwu17a9
+      ingress.kubernetes.io/https-forwarding-rule: k8s2-fs-35725mlx-lims-prod-lims-prod-lims-odwu17a9
+      ingress.kubernetes.io/https-target-proxy: k8s2-ts-35725mlx-lims-prod-lims-prod-lims-odwu17a9
+      ingress.kubernetes.io/redirect-url-map: k8s2-rm-35725mlx-lims-prod-lims-prod-lims-odwu17a9
+      ingress.kubernetes.io/ssl-cert: mcrt-186d8ad1-d1a9-4803-be0c-f1937215c0ba
+      ingress.kubernetes.io/target-proxy: k8s2-tp-35725mlx-lims-prod-lims-prod-lims-odwu17a9
+      ingress.kubernetes.io/url-map: k8s2-um-35725mlx-lims-prod-lims-prod-lims-odwu17a9
+      kubernetes.io/ingress.class: gce
+      kubernetes.io/ingress.global-static-ip-name: lims-prod-ingress-ip
+      networking.gke.io/managed-certificates: lims-prod-lims-cert
+      networking.gke.io/v1beta1.FrontendConfig: lims-prod-lims-frontend-cfg
+    creationTimestamp: "2026-05-17T07:49:39Z"
+    finalizers:
+    - networking.gke.io/ingress-finalizer-V2
+    generation: 1
+    labels:
+      app.kubernetes.io/instance: lims-prod
+      app.kubernetes.io/managed-by: Helm
+      app.kubernetes.io/name: lims
+      app.kubernetes.io/version: 0.1.0
+      helm.sh/chart: lims-0.1.0
+      lims.environment: prod
+    name: lims-prod-lims
+    namespace: lims-prod
+    resourceVersion: "1779092501956015005"
+    uid: d07114eb-d694-46e7-8445-19f0f7a08747
+  spec:
+    rules:
+    - host: lims-jack.duckdns.org
+      http:
+        paths:
+        - backend:
+            service:
+              name: lims-prod-lims-backend
+              port:
+                number: 8000
+          path: /api
+          pathType: Prefix
+        - backend:
+            service:
+              name: lims-prod-lims-backend
+              port:
+                number: 8000
+          path: /admin
+          pathType: Prefix
+        - backend:
+            service:
+              name: lims-prod-lims-backend
+              port:
+                number: 8000
+          path: /healthz
+          pathType: Exact
+        - backend:
+            service:
+              name: lims-prod-lims-backend
+              port:
+                number: 8000
+          path: /readyz
+          pathType: Exact
+        - backend:
+            service:
+              name: lims-prod-lims-backend
+              port:
+                number: 8000
+          path: /metrics
+          pathType: Exact
+        - backend:
+            service:
+              name: lims-prod-lims-backend
+              port:
+                number: 8000
+          path: /static
+          pathType: Prefix
+        - backend:
+            service:
+              name: lims-prod-lims-frontend
+              port:
+                number: 8080
+          path: /
+          pathType: Prefix
+  status:
+    loadBalancer:
+      ingress:
+      - ip: 8.228.234.26
+kind: List
+metadata:
+  resourceVersion: ""
