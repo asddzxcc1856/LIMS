@@ -155,3 +155,17 @@ jobs:
           kubectl rollout status deployment/lims-prod-lims-backend \
             -n lims-prod \
             --timeout=300s
+
+      - name: Run migrations
+        run: |
+          kubectl exec -n lims-prod \
+            deploy/lims-prod-lims-backend \
+            -c app -- \
+            python manage.py migrate --noinput
+
+      - name: Refresh ArgoCD app
+        run: |
+          kubectl annotate application lims-prod \
+            -n argocd \
+            argocd.argoproj.io/refresh=hard \
+            --overwrite
