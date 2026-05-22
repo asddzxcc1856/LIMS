@@ -20,6 +20,7 @@
       row-key="id"
       :pagination="{ pageSize: 10, showTotal: (n) => t('crud.paginationTotal', { total: n }) }"
       bordered
+      :scroll="{ x: 'max-content' }"
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'order_no'">
@@ -84,9 +85,6 @@
           <a-descriptions-item :label="t('orders.laboratory')">
             {{ currentStage.department_name }}
           </a-descriptions-item>
-          <a-descriptions-item :label="t('orders.operator')">
-            {{ currentStage.assignee_name || t('common.notAssigned') }}
-          </a-descriptions-item>
           <a-descriptions-item v-if="currentStage.schedule_start" :label="t('orders.schedule')">
             {{ formatDate(currentStage.schedule_start) }}
             →
@@ -117,6 +115,37 @@
           <p v-if="selectedOrder.remark" style="white-space: pre-wrap">{{ selectedOrder.remark }}</p>
           <a-empty v-else :description="t('orders.noRemark')" :image-style="{ height: 40 }" />
         </div>
+
+        <a-divider />
+
+        <div class="remark-block">
+          <h4>{{ t('orders.signoffHistory') }}</h4>
+          <a-spin :spinning="approvalsLoading">
+            <a-empty
+              v-if="!approvalsLoading && approvalRows.length === 0"
+              :description="t('orders.noApprovals')"
+              :image-style="{ height: 40 }"
+            />
+            <a-timeline v-else>
+              <a-timeline-item
+                v-for="row in approvalRows"
+                :key="row.id"
+                :color="row.decision === 'approved' ? 'green' : 'red'"
+              >
+                <div class="approval-row">
+                  <a-tag :color="row.decision === 'approved' ? 'success' : 'error'">
+                    {{ row.decision_display }}
+                  </a-tag>
+                  <span class="approval-time">{{ formatDate(row.decided_at) }}</span>
+                </div>
+                <div class="approval-meta">
+                  <UserOutlined />&nbsp;{{ row.actor_username || t('orders.signoffSystem') }}
+                </div>
+                <div v-if="row.comment" class="approval-comment">{{ row.comment }}</div>
+              </a-timeline-item>
+            </a-timeline>
+          </a-spin>
+        </div>
       </template>
     </a-drawer>
   </div>
@@ -131,8 +160,14 @@ import {
   EyeOutlined,
   FileAddOutlined,
   ReloadOutlined,
+  UserOutlined,
 } from '@ant-design/icons-vue'
-import { fetchOrder, fetchOrders } from '../../api/orders'
+import {
+  fetchOrder,
+  fetchOrders,
+  fetchOrderSamples,
+  fetchStageApprovals,
+} from '../../api/orders'
 
 const { t } = useI18n()
 
@@ -140,6 +175,16 @@ const orders = ref([])
 const loading = ref(false)
 const detailOpen = ref(false)
 const selectedOrder = ref(null)
+const approvalRows = ref([])
+const approvalsLoading = ref(false)
+const samples = ref([])
+const samplesLoading = ref(false)
+
+const sampleColumns = computed(() => [
+  { title: t('orders.sampleCode'), dataIndex: 'full_code', width: 180 },
+  { title: t('orders.sampleCount'), dataIndex: 'wafer_count', width: 100 },
+  { title: t('orders.sampleNotes'), dataIndex: 'notes', ellipsis: true },
+])
 
 const columns = computed(() => [
   { title: t('orders.orderNo'), dataIndex: 'order_no', width: 200, fixed: 'left' },
@@ -169,8 +214,50 @@ async function viewDetail(record) {
     const { data } = await fetchOrder(record.id)
     selectedOrder.value = data
     detailOpen.value = true
+    await Promise.all([loadApprovals(), loadSamples()])
   } catch {
     message.error(t('orders.loadDetailFailed'))
+  }
+}
+
+async function loadSamples() {
+  if (!selectedOrder.value?.id) {
+    samples.value = []
+    return
+  }
+  samplesLoading.value = true
+  try {
+    const { data } = await fetchOrderSamples(selectedOrder.value.id)
+    samples.value = data || []
+  } catch {
+    samples.value = []
+  } finally {
+    samplesLoading.value = false
+  }
+}
+
+async function loadApprovals() {
+  // Approvals live on stages, so we aggregate every stage's history into
+  // a single timeline ordered by decided_at (newest first).
+  const stages = selectedOrder.value?.stages || []
+  if (!stages.length) {
+    approvalRows.value = []
+    return
+  }
+  approvalsLoading.value = true
+  try {
+    const results = await Promise.all(
+      stages.map((s) =>
+        fetchStageApprovals(s.id)
+          .then((r) => r.data || [])
+          .catch(() => []),
+      ),
+    )
+    approvalRows.value = results
+      .flat()
+      .sort((a, b) => new Date(b.decided_at) - new Date(a.decided_at))
+  } finally {
+    approvalsLoading.value = false
   }
 }
 
@@ -209,5 +296,25 @@ function formatDate(value) {
 .remark-block h4 {
   margin: 0 0 8px;
   font-size: 14px;
+}
+.approval-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.approval-time {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.approval-meta {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  margin-top: 4px;
+}
+.approval-comment {
+  margin-top: 6px;
+  font-size: 13px;
+  white-space: pre-wrap;
 }
 </style>

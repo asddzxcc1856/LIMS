@@ -1,9 +1,15 @@
 # LIMS Frontend (Vue 3 + Vite)
 
-Single-page application for the LIMS relay management system. Built on Vue 3
-(Composition API + `<script setup>`), styled end-to-end with **ant-design-vue**,
-state managed with Pinia, navigation guarded by Vue Router, and internationalised
-to Traditional Chinese (default) + English with a runtime light/dark theme switch.
+Single-page application for the LIMS wafer-fab management system. Built on
+Vue 3 (Composition API + `<script setup>`), styled end-to-end with
+**ant-design-vue**, state managed with Pinia, navigation guarded by Vue Router,
+and internationalised to Traditional Chinese (default) + English with a
+runtime light/dark theme switch.
+
+The lab-member workbench is **specialty-aware**: each role only sees the
+tabs they actually act on (coord sees 待分貨, dispatcher sees 待派工,
+engineer sees 待設定參數, operator sees 上下貨), so colleagues can't step
+on each other's tasks.
 
 > Looking for the project overview? See the [root README](../README.md).
 > The Django backend is documented in [`../backend/README.md`](../backend/README.md).
@@ -18,7 +24,9 @@ to Traditional Chinese (default) + English with a runtime light/dark theme switc
 - [Development](#development)
 - [Testing](#testing)
 - [Theming and i18n](#theming-and-i18n)
+- [Role + specialty UI gating](#role--specialty-ui-gating)
 - [Admin console internals](#admin-console-internals)
+- [Manager reports](#manager-reports)
 - [Routing and role guards](#routing-and-role-guards)
 - [API client](#api-client)
 - [Common tasks](#common-tasks)
@@ -31,12 +39,13 @@ to Traditional Chinese (default) + English with a runtime light/dark theme switc
 |---|---|---|
 | Framework | Vue 3.5 | Composition API + `<script setup>` everywhere |
 | Build | Vite 8 | `vite.config.js` left intentionally minimal |
-| State | Pinia 3 | `auth` store + `settings` store (locale + theme) |
+| State | Pinia 3 | `auth` store (role + lab_specialty + can* flags) + `settings` store |
 | Router | Vue Router 4 | Role-aware guards via `meta.roles` |
 | UI library | ant-design-vue 4 | `<a-config-provider>` powers theme + locale switching |
 | Icons | `@ant-design/icons-vue` | Tree-shaken |
 | HTTP | axios | JWT interceptor + automatic refresh-on-401 in `api/client.js` |
 | i18n | vue-i18n 9 | Composition API mode (`legacy: false`) |
+| Charts | hand-rolled SVG `LineChart` / `BarChart` | No external chart dep — keeps the bundle small |
 | Date | dayjs | Used by every date-picker / formatter |
 | Unit / component testing | vitest 3 + @vue/test-utils + jsdom | `npm test` |
 | End-to-end | Playwright (chromium) | `npm run e2e` |
@@ -49,77 +58,89 @@ to Traditional Chinese (default) + English with a runtime light/dark theme switc
 frontend/
 ├── src/
 │   ├── api/
-│   │   ├── client.js          # axios instance + JWT interceptor + refresh-on-401
-│   │   ├── users.js           # /api/users/*
-│   │   ├── orders.js          # /api/orders/*
-│   │   ├── equipments.js      # /api/equipments/*
-│   │   ├── scheduling.js      # /api/scheduling/*
-│   │   └── admin.js           # uniform CRUD wrappers for /api/admin/* + dashboard/log
+│   │   ├── client.js            # axios instance + JWT interceptor + refresh-on-401
+│   │   ├── users.js             # /api/users/*
+│   │   ├── orders.js            # /api/orders/* incl. samples/<id>/dispatch / parameters /
+│   │   │                        #   assign / load / telemetry / report-abnormal / complete
+│   │   ├── equipments.js        # /api/equipments/* (+ patchEquipment for status flips)
+│   │   ├── scheduling.js        # /api/scheduling/*
+│   │   └── admin.js             # uniform CRUD wrappers + dashboard / logs /
+│   │                            #   chart endpoints / lot-history list + detail
 │   │
 │   ├── stores/
-│   │   ├── auth.js            # JWT + user profile + role computeds
-│   │   └── settings.js        # locale + theme + persistence
+│   │   ├── auth.js              # JWT + user profile + role + labSpecialty +
+│   │   │                        #   canSplit / canDispatch / canSetParameters / canOperate
+│   │   └── settings.js          # locale + theme + persistence
 │   │
 │   ├── router/
-│   │   └── index.js           # routes + role-aware navigation guard
+│   │   └── index.js             # routes + role-aware navigation guard
 │   │
 │   ├── i18n/
-│   │   ├── index.js           # createI18n, reads persisted locale
-│   │   ├── zh-TW.js           # Traditional Chinese catalogue
-│   │   └── en.js              # English catalogue
+│   │   ├── index.js             # createI18n, reads persisted locale
+│   │   ├── zh-TW.js             # Traditional Chinese catalogue (incl. recipe-knob labels)
+│   │   └── en.js                # English catalogue
+│   │
+│   ├── components/
+│   │   ├── TimelineChart.vue    # Equipment booking timeline
+│   │   ├── SampleSplitDialog.vue # 分貨 dialog with 25-wafer cap + running total alert
+│   │   ├── NotificationBell.vue # Bell with unread + critical badge
+│   │   ├── charts/
+│   │   │   ├── LineChart.vue    # Hand-rolled SVG
+│   │   │   └── BarChart.vue
+│   │   └── admin/
+│   │       └── CrudTable.vue    # Generic CRUD driving 10 admin pages
 │   │
 │   ├── views/
-│   │   ├── LoginView.vue      # gradient brand card, antd Form rules
+│   │   ├── LoginView.vue        # gradient brand card, antd Form rules
 │   │   ├── RegisterView.vue
-│   │   ├── DashboardView.vue  # KPI statistics + quick-action panel
-│   │   ├── EquipmentDashboardView.vue   # filterable equipment grid
+│   │   ├── DashboardView.vue    # Specialty-aware MyStats cards + Recent Orders
+│   │   ├── EquipmentDashboardView.vue   # Equipment grid + manager-only status quick-change
 │   │   │
 │   │   ├── requester/
 │   │   │   ├── OrderListView.vue        # antd Table + relay Steps drawer
+│   │   │   │                            # (operator names auto-masked)
 │   │   │   └── OrderCreateView.vue      # antd Form + capacity preview
 │   │   │
 │   │   ├── manager/
-│   │   │   └── OrderReviewView.vue      # 4 modals: approve / reject / reassign / booking
+│   │   │   ├── OrderReviewView.vue      # 簽核 modal — auto-reload on success
+│   │   │   └── ManagerReportsView.vue   # Utilization line + KPI strip +
+│   │   │                                #   stage/sub-LOT status tables +
+│   │   │                                #   operator activity bar with timeline drill +
+│   │   │                                #   子 LOT 履歷追蹤 timeline
 │   │   │
 │   │   ├── member/
-│   │   │   └── OrderTasksView.vue       # time-locked complete via Popconfirm
+│   │   │   └── OrderTasksView.vue       # Tabs gated by auth.canSplit /
+│   │   │                                #   canDispatch / canSetParameters /
+│   │   │                                #   canOperate; abnormal report modal
 │   │   │
 │   │   └── admin/
 │   │       ├── AdminLayout.vue          # /admin shell — collapsible dark sider
 │   │       ├── DashboardView.vue        # KPI cards + 30 s auto-refresh
 │   │       ├── ActivityLogsView.vue     # 6 filters + detail Drawer
-│   │       ├── FabsView.vue             # 10 CRUD pages
-│   │       ├── DepartmentsView.vue
-│   │       ├── UsersView.vue
-│   │       ├── ExperimentsView.vue
-│   │       ├── EquipmentTypesView.vue
-│   │       ├── EquipmentView.vue
-│   │       ├── ExperimentRequirementsView.vue
-│   │       ├── OrdersView.vue
-│   │       ├── OrderStagesView.vue
-│   │       └── BookingsView.vue
+│   │       └── …                        # 10 CRUD pages (FAB/Dept/User/…)
 │   │
-│   ├── components/
-│   │   ├── TimelineChart.vue            # legacy 72px timeline (kept as-is)
-│   │   └── admin/
-│   │       └── CrudTable.vue            # generic CRUD component — drives all 10 admin pages
+│   ├── composables/
+│   │   ├── useBreakpoint.js     # window-width reactive helper
+│   │   └── useLocalizedLabel.js # picks name_en vs name based on active locale
 │   │
-│   ├── App.vue                          # ConfigProvider + layout shell + Settings drawer
-│   ├── main.js                          # plugins: pinia, router, i18n, antd
-│   └── style.css                        # tokens + dark/light CSS variables
+│   ├── App.vue                  # ConfigProvider + layout shell + Settings drawer
+│   ├── main.js                  # plugins: pinia, router, i18n, antd
+│   └── style.css                # tokens + dark/light CSS variables
 │
 ├── tests/                                # vitest unit / component tests
 │   ├── setup.js                          # localStorage polyfill (Node 25 fix)
-│   ├── auth.store.test.js                # 9 cases
-│   ├── settings.store.test.js            # 9 cases
-│   ├── admin.api.test.js                 # 9 cases
-│   ├── LoginView.test.js                 # 4 cases
-│   └── CrudTable.test.js                 # 8 cases
+│   ├── auth.store.test.js                # auth store + role + specialty computeds
+│   ├── settings.store.test.js
+│   ├── admin.api.test.js                 # axios stubs for every admin CRUD verb
+│   ├── LoginView.test.js
+│   ├── CrudTable.test.js
+│   ├── SampleSplitDialog.test.js         # 25-wafer cap validation
+│   └── NotificationBell.test.js
 │
 ├── e2e/                                  # Playwright specs
-│   ├── login.spec.js                     # 3 cases
-│   ├── admin-console.spec.js             # 4 cases
-│   └── admin-crud.spec.js                # 1 full create→edit→delete cycle
+│   ├── login.spec.js
+│   ├── admin-console.spec.js
+│   └── admin-crud.spec.js
 │
 ├── playwright.config.js
 ├── vitest.config.js
@@ -159,9 +180,9 @@ VITE_API_BASE=https://api.lims.example.com/api npm run dev
 | `npm run e2e` | Playwright (auto-starts vite via webServer config) |
 | `npm run e2e:ui` | Playwright UI mode |
 
-The dev server proxies API calls to the backend baseURL configured in
-`src/api/client.js`. CORS is whitelisted for `localhost:5173` and `127.0.0.1:5173`
-on the Django side.
+The dev server hits the backend at `VITE_API_BASE` (default
+`http://127.0.0.1:8000/api`). CORS is whitelisted for `localhost:5173` and
+`127.0.0.1:5173` on the Django side.
 
 ---
 
@@ -169,25 +190,27 @@ on the Django side.
 
 ### Unit / component (vitest)
 
-5 files, **39 cases**. Run with `npm test`.
+**55 cases** across 8 files.
 
 | File | Coverage focus |
 |---|---|
-| `auth.store.test.js` | Token persistence, logout cleanup, profile-load failure path, role computed matrix |
+| `auth.store.test.js` | Token persistence, logout cleanup, profile-load failure path, role + specialty computed matrix |
 | `settings.store.test.js` | Defaults, persistence, unknown-value rejection, toggle helpers, `data-theme` DOM stamping |
-| `admin.api.test.js` | Every CRUD verb of every admin resource + dashboard/log fetchers (axios stubbed) |
+| `admin.api.test.js` | Every CRUD verb of every admin resource + dashboard / log / chart fetchers (axios stubbed) |
 | `LoginView.test.js` | Form wiring + login flow + backend error message surfacing |
 | `CrudTable.test.js` | Generic CRUD lifecycle: pagination, search reload, modal init, write-only password handling, delete reload |
+| `SampleSplitDialog.test.js` | Cleaning + numeric coercion + 25-wafer cap validation |
+| `NotificationBell.test.js` | Unread badge + critical-only filter + mark-all-read |
 
 The `tests/setup.js` polyfills `localStorage` because Node 25 ships an
-experimental built-in whose Web Storage methods (`getItem`, `setItem`, `clear`,
-…) are missing. jsdom 29 surfaces the same broken object on `window.localStorage`,
-so production code that calls `localStorage.getItem(...)` would otherwise crash.
+experimental built-in whose Web Storage methods are missing. jsdom 29
+surfaces the same broken object on `window.localStorage`, so production
+code that calls `localStorage.getItem(...)` would otherwise crash.
 
 ### End-to-end (Playwright)
 
-3 files, **8 cases**. Run with `npm run e2e` (the backend must be available
-on `:8000` first).
+**8 cases** across 3 files. Run with `npm run e2e` (the backend must be
+available on `:8000` first).
 
 | File | Coverage |
 |---|---|
@@ -233,21 +256,41 @@ apply instantly without reloading.
    import { useI18n } from 'vue-i18n'
    const { t } = useI18n()
    </script>
-
-   <template>
-     <a-button>{{ t('auth.login') }}</a-button>
-   </template>
    ```
 3. For interpolations: `t('dashboard.welcome', { name: user.username })`.
 
-### What's already translated
+### Recipe-knob labels
 
-- `App.vue` (sidebar, header, footer, user dropdown)
-- `LoginView`, `RegisterView`
-- Root `DashboardView`
+`paramLabel.<key>` in `zh-TW.js` maps every Recipe parameter key (e.g.
+`accel_kV`, `helium_flow_sccm`, `beam_current_uA`) to a Chinese label
+so the engineer's params dialog shows `加速電壓 (kV)` instead of the raw
+DB key. New knobs added by `enrich_recipe_parameters` need a matching
+entry here.
 
-Other pages still ship literal zh-TW strings — the i18n plumbing is in place,
-they can be migrated incrementally without touching infrastructure.
+---
+
+## Role + specialty UI gating
+
+The `auth` store exposes a set of computed flags that drive both the
+`/orders/tasks` tab visibility and the nav menu:
+
+| Computed | True when | Used by |
+|---|---|---|
+| `isManager` | `role ∈ {lab_manager, superuser}` | Review / Reports nav entries |
+| `isMember` | `role ∈ {lab_member, lab_manager, superuser}` | Dashboard quick-action panel |
+| `isSuperuser` | role + `is_superuser` flag | Admin console entry |
+| `labSpecialty` | `user.lab_specialty` string | UI gating below |
+| `canSplit` | superuser OR `labSpecialty === 'coord'` | 待分貨 tab + split button |
+| `canDispatch` | superuser OR `labSpecialty === 'dispatcher'` | 待派工 tab + dispatch button |
+| `canSetParameters` | superuser OR `labSpecialty === 'engineer'` | 待設定參數 tab + params modal |
+| `canOperate` | superuser OR `labSpecialty === 'operator'` | 進行中・上下貨 tab + load/abnormal buttons |
+
+Managers intentionally **do NOT bypass** these computed flags — they have
+their own Review / Reports pages and never touch the per-specialty workbench.
+The router meta on `/orders/tasks` is restricted to `['lab_member', 'superuser']`.
+
+`OrderTasksView` chooses its default active tab based on the same flags
+so e.g. a `dispatcher` lands on 待派工 instead of the (hidden) 待分貨.
 
 ---
 
@@ -276,36 +319,32 @@ view: on edit, leaving it empty submits without that key, so passwords don't
 get reset.
 
 `optionsResource` lets a select dropdown lazily load its choices from another
-admin endpoint. Example from `UsersView.vue`:
+admin endpoint.
 
-```js
-{
-  name: 'department',
-  label: '部門',
-  type: 'select',
-  optionsResource: adminDepartments,
-  optionLabel: 'name',
-  nullableEmpty: true,
-  span: 12,
-}
-```
+---
 
-### Admin pages
+## Manager reports
 
-| Path | Resource | Notes |
-|---|---|---|
-| `/admin/dashboard` | `monitoring/dashboard` | 4 KPIs + distributions + recent activity, 30 s auto-refresh |
-| `/admin/logs` | `monitoring/logs` | 6 filters + detail Drawer rendering redacted JSON body |
-| `/admin/fabs` | `admin/fabs` | CRUD |
-| `/admin/departments` | `admin/departments` | CRUD with FK select to FAB |
-| `/admin/users` | `admin/users` | CRUD with hashed-password write-only field |
-| `/admin/experiments` | `admin/experiments` | CRUD |
-| `/admin/equipment-types` | `admin/equipment-types` | CRUD |
-| `/admin/equipment` | `admin/equipment` | CRUD; **department is required** (allocate-to-lab is the main task) |
-| `/admin/experiment-requirements` | `admin/experiment-requirements` | M:N bridge between Experiment and EquipmentType + step order |
-| `/admin/orders` | `admin/orders` | CRUD; status changes here bypass the state machine — use with care |
-| `/admin/order-stages` | `admin/order-stages` | CRUD |
-| `/admin/bookings` | `admin/bookings` | CRUD with start/end-time validation |
+`/reports` (`views/manager/ManagerReportsView.vue`) is the primary
+oversight surface for `lab_manager` and `superuser`. It pulls four
+endpoints in parallel and renders:
+
+1. **Order business KPI strip** — created / done / rejected / in-progress
+   counts + rejection rate + mean lead times (done / rejected / sign-off latency).
+2. **Daily charts** — equipment utilization line chart + order trend
+   (created / done / rejected per day).
+3. **Status breakdowns** — three side-by-side tables: stage status,
+   sub-LOT status, per equipment type (running stages + completed sub-LOTs +
+   mean run hours).
+4. **Operator activity** — bar chart + drill-down table. Each row expands
+   to a timeline of that operator's approvals, stage events, and sample
+   lifecycle stamps.
+5. **子 LOT 履歷追蹤** — every Sample in the lab over the window, with the
+   per-step user names pre-joined into the row. Clicking expands a vertical
+   `<a-timeline>` showing every milestone for that sub-LOT (簽核 / 接件 /
+   分貨 / 派工 / 設定參數 / 指派 / 上貨 / 量測 / 下貨 / 中止 · 異常).
+
+Lab managers see only their own lab; superusers see every lab.
 
 ---
 
@@ -338,6 +377,14 @@ with named functions. `api/admin.js` exposes a uniform `resource(name)` factory
 returning `{ list, retrieve, create, update, remove }`, so `CrudTable` doesn't
 need to know which endpoint it's talking to.
 
+### Backend response shape
+
+The `/api/equipments/` and `/api/equipments/recipes/` endpoints are
+intentionally **non-paginated** (the dispatch dialog filters them
+client-side by equipment_type). Other list endpoints follow the DRF
+default `{count, next, previous, results}` shape. Per-domain wrappers
+handle both via `data.results || data || []`.
+
 ---
 
 ## Common tasks
@@ -348,28 +395,8 @@ need to know which endpoint it's talking to.
    ```js
    export const adminNewModel = resource('new-model')
    ```
-2. Create `views/admin/NewModelView.vue`:
-   ```vue
-   <template>
-     <CrudTable
-       :resource="adminNewModel"
-       resource-label="新模型"
-       title="新模型"
-       :columns="columns"
-       :form-fields="formFields"
-     />
-   </template>
-
-   <script setup>
-   import CrudTable from '../../components/admin/CrudTable.vue'
-   import { adminNewModel } from '../../api/admin'
-
-   const columns = [{ title: '名稱', dataIndex: 'name' }]
-   const formFields = [
-     { name: 'name', label: '名稱', type: 'text', required: true },
-   ]
-   </script>
-   ```
+2. Create `views/admin/NewModelView.vue` using `<CrudTable>` with `columns`
+   and `formFields` configs.
 3. Wire it up in `router/index.js` under the `/admin` parent.
 4. Add the menu entry in `views/admin/AdminLayout.vue`'s `menuConfig`.
 
@@ -384,6 +411,12 @@ need to know which endpoint it's talking to.
 ```
 
 The router guard already enforces `meta.roles`. No further code needed.
+
+### Add a new specialty-gated tab
+
+1. Add the relevant `can<Step>` computed in `stores/auth.js`.
+2. Gate the `<a-tab-pane>` with `v-if="auth.can<Step>"`.
+3. Pin the tab's default key in the parent's `_defaultTab()` helper.
 
 ### Translate a page
 

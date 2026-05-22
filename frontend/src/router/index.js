@@ -9,6 +9,7 @@ import DashboardView from '../views/DashboardView.vue'
 import OrderCreateView from '../views/requester/OrderCreateView.vue'
 import OrderListView from '../views/requester/OrderListView.vue'
 import OrderReviewView from '../views/manager/OrderReviewView.vue'
+import ManagerReportsView from '../views/manager/ManagerReportsView.vue'
 import OrderTasksView from '../views/member/OrderTasksView.vue'
 import EquipmentDashboardView from '../views/EquipmentDashboardView.vue'
 
@@ -22,10 +23,14 @@ import AdminUsersView from '../views/admin/UsersView.vue'
 import AdminExperimentsView from '../views/admin/ExperimentsView.vue'
 import AdminEquipmentTypesView from '../views/admin/EquipmentTypesView.vue'
 import AdminEquipmentView from '../views/admin/EquipmentView.vue'
+import AdminRecipesView from '../views/admin/RecipesView.vue'
 import AdminExperimentRequirementsView from '../views/admin/ExperimentRequirementsView.vue'
 import AdminOrdersView from '../views/admin/OrdersView.vue'
 import AdminOrderStagesView from '../views/admin/OrderStagesView.vue'
 import AdminBookingsView from '../views/admin/BookingsView.vue'
+import AdminStageEventsView from '../views/admin/StageEventsView.vue'
+import AdminApprovalsView from '../views/admin/ApprovalsView.vue'
+import AdminSamplesView from '../views/admin/SamplesView.vue'
 
 const routes = [
   { path: '/login', name: 'Login', component: LoginView, meta: { guest: true } },
@@ -40,12 +45,19 @@ const routes = [
     component: OrderReviewView,
     meta: { roles: ['lab_manager', 'superuser'] },
   },
+  {
+    path: '/reports',
+    name: 'ManagerReports',
+    component: ManagerReportsView,
+    meta: { roles: ['lab_manager', 'superuser'] },
+  },
   // Lab Member
   {
     path: '/orders/tasks',
     name: 'LabTasks',
     component: OrderTasksView,
-    meta: { roles: ['lab_member', 'lab_manager', 'superuser'] },
+    // Managers don't have a workflow specialty — Review is their page.
+    meta: { roles: ['lab_member', 'superuser'] },
   },
   // Equipment dashboard — hidden from regular employees / lab members; the
   // requester UI must not surface the underlying machine inventory.
@@ -72,6 +84,7 @@ const routes = [
       { path: 'experiments', name: 'AdminExperiments', component: AdminExperimentsView },
       { path: 'equipment-types', name: 'AdminEquipmentTypes', component: AdminEquipmentTypesView },
       { path: 'equipment', name: 'AdminEquipment', component: AdminEquipmentView },
+      { path: 'recipes', name: 'AdminRecipes', component: AdminRecipesView },
       {
         path: 'experiment-requirements',
         name: 'AdminExperimentRequirements',
@@ -80,6 +93,9 @@ const routes = [
       { path: 'orders', name: 'AdminOrders', component: AdminOrdersView },
       { path: 'order-stages', name: 'AdminOrderStages', component: AdminOrderStagesView },
       { path: 'bookings', name: 'AdminBookings', component: AdminBookingsView },
+      { path: 'stage-events', name: 'AdminStageEvents', component: AdminStageEventsView },
+      { path: 'approvals', name: 'AdminApprovals', component: AdminApprovalsView },
+      { path: 'samples', name: 'AdminSamples', component: AdminSamplesView },
     ],
   },
 ]

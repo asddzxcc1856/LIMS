@@ -1,0 +1,16 @@
+# Keep the build context small + reproducible — anything generated locally
+# is recreated inside the build container.
+node_modules
+dist
+coverage
+.cache
+.vite
+.vscode
+.idea
+*.log
+npm-debug.log*
+.DS_Store
+# Tests run in CI, not at image-build time.
+e2e
+playwright-report
+test-results

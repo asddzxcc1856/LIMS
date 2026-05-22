@@ -16,52 +16,31 @@
       </template>
     </a-page-header>
 
-    <a-row :gutter="[16, 16]">
-      <a-col :xs="24" :sm="12" :md="6">
+    <!-- Role-driven KPI cards.
+         Backend /api/monitoring/my-stats/ returns one card per metric
+         relevant to the caller's role, so the home dashboard adapts to
+         what each user actually needs to act on. -->
+    <a-row :gutter="[16, 16]" v-if="myCards.length">
+      <a-col
+        v-for="card in myCards"
+        :key="card.key"
+        :xs="24" :sm="12" :md="8" :lg="6"
+      >
         <a-card hoverable>
           <a-statistic
-            :title="t('dashboard.totalOrders')"
-            :value="stats.total"
-            :value-style="{ color: '#1890ff' }"
-          >
-            <template #prefix><ProfileOutlined /></template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-card hoverable>
-          <a-statistic
-            :title="t('dashboard.waiting')"
-            :value="stats.waiting"
-            :value-style="{ color: '#faad14' }"
-          >
-            <template #prefix><ClockCircleOutlined /></template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-card hoverable>
-          <a-statistic
-            :title="t('dashboard.inProgress')"
-            :value="stats.in_progress"
-            :value-style="{ color: '#722ed1' }"
-          >
-            <template #prefix><ThunderboltOutlined /></template>
-          </a-statistic>
-        </a-card>
-      </a-col>
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-card hoverable>
-          <a-statistic
-            :title="t('dashboard.done')"
-            :value="stats.done"
-            :value-style="{ color: '#52c41a' }"
-          >
-            <template #prefix><CheckCircleOutlined /></template>
-          </a-statistic>
+            :title="card.label"
+            :value="card.value"
+            :value-style="{ color: card.color || '#1890ff' }"
+          />
+          <div v-if="card.hint" class="stat-hint">{{ card.hint }}</div>
         </a-card>
       </a-col>
     </a-row>
+    <a-empty
+      v-else-if="!myStatsLoading"
+      :description="t('dashboard.noStatsForRole')"
+      style="padding: 24px 0"
+    />
 
     <a-row :gutter="[16, 16]" style="margin-top: 16px">
       <a-col :xs="24" :md="16">
@@ -149,6 +128,7 @@ import {
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '../stores/auth'
 import { fetchOrders } from '../api/orders'
+import client from '../api/client'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -157,6 +137,8 @@ const { t } = useI18n()
 const stats = ref({ total: 0, waiting: 0, in_progress: 0, done: 0 })
 const recentOrders = ref([])
 const loading = ref(false)
+const myCards = ref([])
+const myStatsLoading = ref(false)
 
 const orderColumns = computed(() => [
   { title: t('orders.orderNo'), dataIndex: 'order_no', width: 180 },
@@ -189,6 +171,17 @@ const canCreateOrder = computed(
 
 onMounted(async () => {
   loading.value = true
+  myStatsLoading.value = true
+
+  // Pull role-aware KPI cards from the backend; falls back to empty
+  // array on transient failure so the dashboard never blanks out.
+  client.get('/monitoring/my-stats/')
+    .then(({ data }) => { myCards.value = data?.cards || [] })
+    .catch(() => { myCards.value = [] })
+    .finally(() => { myStatsLoading.value = false })
+
+  // Recent orders panel — for roles that own orders (requester /
+  // superuser); others quietly get an empty list.
   try {
     const { data } = await fetchOrders()
     const orders = data.results || data || []
@@ -200,7 +193,7 @@ onMounted(async () => {
     }
     recentOrders.value = orders.slice(0, 5)
   } catch {
-    /* 對於部分角色 (e.g. lab_member 沒 orders 權限) 忽略錯誤 */
+    /* lab_member without an own-orders view, etc. — silent ignore. */
   } finally {
     loading.value = false
   }
@@ -234,5 +227,11 @@ function goAdmin() { router.push('/admin') }
 }
 .muted {
   color: var(--c-text-muted);
+}
+.stat-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--c-text-muted);
+  line-height: 1.4;
 }
 </style>

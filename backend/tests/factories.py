@@ -13,6 +13,7 @@ from equipments.models import (
     EquipmentType,
     Experiment,
     ExperimentRequiredEquipment,
+    Recipe,
 )
 from orders.models import Order, OrderStage
 from scheduling.models import EquipmentBooking
@@ -77,6 +78,36 @@ class LabManagerFactory(UserFactory):
 class LabMemberFactory(UserFactory):
     role = User.Role.LAB_MEMBER
     username = factory.Sequence(lambda n: f'member-{n:04d}')
+    # Default specialty stays NONE so tests that don't care about the
+    # specialty gate (e.g. visibility / listing tests) keep working
+    # without forcing every fixture caller to think about it. Tests that
+    # exercise the workflow services should use the specialized
+    # subclasses below.
+    lab_specialty = User.LabSpecialty.NONE
+
+
+class LabCoordFactory(LabMemberFactory):
+    """lab_member specialised in 分貨 (the split step)."""
+    username = factory.Sequence(lambda n: f'coord-{n:04d}')
+    lab_specialty = User.LabSpecialty.COORDINATOR
+
+
+class LabDispatcherFactory(LabMemberFactory):
+    """lab_member specialised in 派工 (the dispatch step)."""
+    username = factory.Sequence(lambda n: f'dispatcher-{n:04d}')
+    lab_specialty = User.LabSpecialty.DISPATCHER
+
+
+class LabEngineerFactory(LabMemberFactory):
+    """lab_member specialised in 設定參數 (the recipe-knob step)."""
+    username = factory.Sequence(lambda n: f'engineer-{n:04d}')
+    lab_specialty = User.LabSpecialty.ENGINEER
+
+
+class LabOperatorFactory(LabMemberFactory):
+    """lab_member specialised in 機台執行 (load / unload / run)."""
+    username = factory.Sequence(lambda n: f'operator-{n:04d}')
+    lab_specialty = User.LabSpecialty.OPERATOR
 
 
 # ── Equipment ──────────────────────────────────────────────────────────────
@@ -124,6 +155,17 @@ class ExperimentFactory(DjangoModelFactory):
             step_order=step_order,
         )
         return exp
+
+
+class RecipeFactory(DjangoModelFactory):
+    class Meta:
+        model = Recipe
+
+    name = factory.Sequence(lambda n: f'Recipe-{n:03d}')
+    equipment_type = factory.SubFactory(EquipmentTypeFactory)
+    version = 1
+    parameters = factory.LazyFunction(lambda: {'temp': 250, 'time_sec': 600})
+    is_active = True
 
 
 class ExperimentRequiredEquipmentFactory(DjangoModelFactory):

@@ -27,7 +27,9 @@ test.describe('Admin console', () => {
     )
     await expect(page.getByText('總訂單數')).toBeVisible()
     await expect(page.getByText('進行中訂單')).toBeVisible()
-    await expect(page.getByText('設備使用率')).toBeVisible()
+    // Anchor on the full KPI title — the dashboard also shows a chart
+    // card titled "近 14 日設備使用率", so a substring match isn't unique.
+    await expect(page.getByText('設備使用率 (24h)')).toBeVisible()
     await expect(page.getByText('最近活動')).toBeVisible()
   })
 

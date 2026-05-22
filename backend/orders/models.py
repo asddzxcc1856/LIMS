@@ -121,8 +121,9 @@ class OrderStage(models.Model):
     """Specific step in an order's relay pipeline."""
 
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'   # Waiting for prev stage
-        WAITING = 'waiting', 'Waiting'   # Waiting for manager to assign
+        PENDING = 'pending', 'Pending'      # Waiting for prev stage (legacy)
+        WAITING = 'waiting', 'Waiting'      # Submitted, awaiting manager sign-off
+        APPROVED = 'approved', 'Approved'   # Signed off, awaiting dispatch
         IN_PROGRESS = 'in_progress', 'In Progress'
         DONE = 'done', 'Done'
         REJECTED = 'rejected', 'Rejected'
@@ -155,11 +156,49 @@ class OrderStage(models.Model):
         null=True, blank=True,
         related_name='stage_bookings'
     )
+    recipe = models.ForeignKey(
+        'equipments.Recipe',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stages',
+        help_text='Recipe used on the picked equipment for this stage.',
+    )
+    # 參數設定: process engineer can override specific recipe knobs at
+    # dispatch time. Keys MUST exist in ``recipe.parameters`` — validation
+    # in :func:`orders.services._attach_recipe_overrides` enforces the
+    # "受控 recipe 範圍內" constraint so an operator can never invent a
+    # parameter name that the machine recipe doesn't define.
+    parameter_overrides = models.JSONField(default=dict, blank=True)
+    # Explicit ack flag for the 參數設定 step. The lab personnel who tunes
+    # the recipe knobs leaves their fingerprint here so the next member —
+    # the one who clicks 啟動 — sees that the parameters have been signed
+    # off. NULL means the step hasn't been done yet (overrides=={} alone
+    # isn't enough because some recipes have no editable knobs).
+    parameters_set_at = models.DateTimeField(null=True, blank=True)
+    parameters_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stages_parameters_set',
+    )
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
-    
+
     schedule_start = models.DateTimeField(null=True, blank=True)
     schedule_end = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    # 接件 — lab personnel acknowledged the wafer is physically at the lab.
+    # Captured independently of approval / scheduling so the receive audit
+    # has its own timestamp.
+    received_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stages_received',
+    )
 
     class Meta:
         db_table = 'order_stage'
@@ -168,4 +207,187 @@ class OrderStage(models.Model):
 
     def __str__(self):
         return f'{self.order.order_no} | Step {self.step_order} | {self.get_status_display()}'
+
+
+class Sample(models.Model):
+    """A subset of wafers carved out of an Order's parent wafer lot.
+
+    分貨系統 (WIP split): lab personnel can break a submitted lot into
+    multiple sub-groups so different recipes can run in parallel without
+    forcing the requester to file separate orders. Each Sample is the
+    unit of dispatch — every sub-lot independently picks its own
+    machine, recipe, parameter set, assignee, and tracks its own load /
+    unload events. The OrderStage row stays as the umbrella record but
+    no longer owns these per-sub-lot details.
+    """
+
+    class Status(models.TextChoices):
+        WAITING = 'waiting', '等待派工'
+        DISPATCHED = 'dispatched', '已派工 待設定參數'
+        PARAMS_SET = 'params_set', '已設參數 待指派'
+        READY = 'ready', '已指派 待上貨'
+        RUNNING = 'running', '進行中'
+        DONE = 'done', '完成'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='samples',
+    )
+    sub_code = models.CharField(
+        max_length=40,
+        help_text='Suffix identifying this WIP group (e.g. "A", "B").',
+    )
+    wafer_count = models.PositiveIntegerField(default=1)
+    notes = models.TextField(blank=True, default='')
+    parent_sample = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='children',
+    )
+    # 派工排程: explicit execution order so lab personnel can dictate
+    # which WIP runs first when multiple samples share an order. Smaller
+    # number first; ties broken by created_at.
+    execution_order = models.PositiveIntegerField(default=0)
+
+    # ── Per-sample dispatch state ────────────────────────────────
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.WAITING,
+        db_index=True,
+    )
+    equipment = models.ForeignKey(
+        'equipments.Equipment',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sample_dispatches',
+    )
+    # Tracks who hit the 派工 button — used by the rotation rule that
+    # forbids one person owning two consecutive steps on the same sample
+    # (the spec calls this 各司其職 / division of labour).
+    dispatched_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_dispatched',
+    )
+    recipe = models.ForeignKey(
+        'equipments.Recipe',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sample_dispatches',
+    )
+    parameter_overrides = models.JSONField(default=dict, blank=True)
+    parameters_set_at = models.DateTimeField(null=True, blank=True)
+    parameters_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_parameters_set',
+    )
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_assigned',
+        help_text='Lab member responsible for running this sample on its machine.',
+    )
+    schedule_start = models.DateTimeField(null=True, blank=True)
+    schedule_end = models.DateTimeField(null=True, blank=True)
+    loaded_at = models.DateTimeField(null=True, blank=True)
+    loaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_loaded',
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='samples_completed',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='samples_created',
+    )
+
+    class Meta:
+        db_table = 'sample'
+        ordering = ['order', 'execution_order', 'sub_code']
+        unique_together = ('order', 'sub_code')
+        indexes = [
+            models.Index(fields=['order', 'sub_code']),
+            models.Index(fields=['order', 'execution_order']),
+            models.Index(fields=['parent_sample']),
+        ]
+
+    @property
+    def full_code(self):
+        """Stable display string: ``<lot_code>-<sub_code>``."""
+        lot = self.order.lot_id or 'NA'
+        return f'{lot}-{self.sub_code}'
+
+    def __str__(self):
+        return self.full_code
+
+
+class Approval(models.Model):
+    """Append-only sign-off record for an OrderStage.
+
+    Every manager decision on a stage — pure sign-off, full schedule, or
+    rejection — leaves one Approval row. The model is deliberately
+    independent of ``OrderStage.status`` so the audit history survives any
+    later status flip (a re-opened stage doesn't erase the original
+    sign-off; a fresh row is added instead).
+
+    ``decision`` distinguishes the three outcomes; ``comment`` is the
+    free-text rationale the manager typed (mandatory on reject, optional
+    on approve). ``actor`` may go NULL when the original manager account
+    is later deleted — the historical record stays useful as long as the
+    decided_at + comment are intact.
+    """
+
+    class Decision(models.TextChoices):
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(
+        OrderStage,
+        on_delete=models.CASCADE,
+        related_name='approvals',
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approvals_given',
+    )
+    decision = models.CharField(max_length=10, choices=Decision.choices)
+    comment = models.TextField(blank=True, default='')
+    decided_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'approval'
+        ordering = ['-decided_at']
+        indexes = [
+            models.Index(fields=['stage', '-decided_at']),
+            models.Index(fields=['actor', '-decided_at']),
+            models.Index(fields=['decision', '-decided_at']),
+        ]
+
+    def __str__(self):
+        actor = self.actor.username if self.actor else 'unknown'
+        return f'{actor} {self.get_decision_display()} {self.stage_id} @ {self.decided_at:%Y-%m-%d %H:%M}'
 

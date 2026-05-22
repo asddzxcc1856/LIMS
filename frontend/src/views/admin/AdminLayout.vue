@@ -4,8 +4,10 @@
       v-model:collapsed="collapsed"
       collapsible
       :width="240"
+      :collapsed-width="isMobile ? 0 : 64"
       theme="dark"
       class="admin-sider"
+      :class="{ 'admin-sider-mobile': isMobile, 'admin-sider-collapsed': collapsed }"
     >
       <div class="admin-brand">
         <ThunderboltOutlined class="brand-icon" />
@@ -20,6 +22,13 @@
       />
     </a-layout-sider>
 
+    <!-- Mobile backdrop closes the sider when tapped outside. -->
+    <div
+      v-if="isMobile && !collapsed"
+      class="sider-backdrop"
+      @click="collapsed = true"
+    ></div>
+
     <a-layout>
       <a-layout-header class="admin-header">
         <div class="admin-header-left">
@@ -32,16 +41,17 @@
           </a-breadcrumb>
         </div>
         <div class="admin-header-right">
-          <a-tag color="processing" v-if="auth.user">
+          <NotificationBell />
+          <a-tag v-if="auth.user" color="processing" class="who-tag">
             <UserOutlined />&nbsp;{{ auth.user.username }} ({{ auth.role }})
           </a-tag>
-          <a-button type="link" @click="goHome">
+          <a-button type="link" @click="goHome" class="back-btn">
             <template #icon><RollbackOutlined /></template>
-            {{ t('admin.backToMain') }}
+            <span class="btn-text">{{ t('admin.backToMain') }}</span>
           </a-button>
-          <a-button type="link" danger @click="onLogout">
+          <a-button type="link" danger @click="onLogout" class="logout-btn">
             <template #icon><LogoutOutlined /></template>
-            {{ t('auth.logout') }}
+            <span class="btn-text">{{ t('auth.logout') }}</span>
           </a-button>
         </div>
       </a-layout-header>
@@ -73,7 +83,11 @@ import {
   ClusterOutlined,
   ContainerOutlined,
   DashboardOutlined,
+  DeploymentUnitOutlined,
   ExperimentOutlined,
+  HistoryOutlined,
+  PartitionOutlined,
+  SafetyCertificateOutlined,
   FileSearchOutlined,
   HomeOutlined,
   LogoutOutlined,
@@ -87,13 +101,27 @@ import {
   UserOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth'
+import { useBreakpoint } from '../../composables/useBreakpoint'
+import NotificationBell from '../../components/NotificationBell.vue'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const { t } = useI18n()
 
+const { isMobile, isTablet } = useBreakpoint()
 const collapsed = ref(false)
+
+watch(
+  isTablet,
+  (small) => { if (small) collapsed.value = true },
+  { immediate: true },
+)
+watch(
+  isMobile,
+  (small) => { if (small) collapsed.value = true },
+  { immediate: true },
+)
 
 const menuConfig = computed(() => [
   { key: 'dashboard', label: t('admin.nav.dashboard'), icon: DashboardOutlined, path: '/admin/dashboard' },
@@ -107,6 +135,7 @@ const menuConfig = computed(() => [
   { key: 'experiments', label: t('admin.nav.experiments'), icon: ExperimentOutlined, path: '/admin/experiments' },
   { key: 'equipment-types', label: t('admin.nav.equipmentTypes'), icon: AppstoreOutlined, path: '/admin/equipment-types' },
   { key: 'equipment', label: t('admin.nav.equipment'), icon: ToolOutlined, path: '/admin/equipment' },
+  { key: 'recipes', label: t('admin.nav.recipes'), icon: DeploymentUnitOutlined, path: '/admin/recipes' },
   {
     key: 'experiment-requirements',
     label: t('admin.nav.experimentRequirements'),
@@ -117,6 +146,9 @@ const menuConfig = computed(() => [
   { key: 'orders', label: t('admin.nav.orders'), icon: ProfileOutlined, path: '/admin/orders' },
   { key: 'order-stages', label: t('admin.nav.orderStages'), icon: NodeIndexOutlined, path: '/admin/order-stages' },
   { key: 'bookings', label: t('admin.nav.bookings'), icon: CalendarOutlined, path: '/admin/bookings' },
+  { key: 'stage-events', label: t('admin.nav.stageEvents'), icon: HistoryOutlined, path: '/admin/stage-events' },
+  { key: 'approvals', label: t('admin.nav.approvals'), icon: SafetyCertificateOutlined, path: '/admin/approvals' },
+  { key: 'samples', label: t('admin.nav.samples'), icon: PartitionOutlined, path: '/admin/samples' },
 ])
 
 const menuItems = computed(() =>
@@ -175,6 +207,24 @@ function onLogout() {
   position: sticky;
   top: 0;
   height: 100vh;
+  z-index: 50;
+}
+
+.admin-sider-mobile {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  transition: transform 0.2s ease;
+}
+.admin-sider-mobile.admin-sider-collapsed {
+  transform: translateX(-100%);
+}
+.sider-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 40;
 }
 
 .admin-brand {
@@ -204,12 +254,21 @@ function onLogout() {
   background: var(--c-bg-card);
   border-bottom: 1px solid var(--c-border);
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.admin-header-left {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .admin-header-right {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .admin-content {
@@ -226,6 +285,45 @@ function onLogout() {
   text-align: center;
   color: var(--c-text-muted);
   background: transparent;
+}
+
+@media (max-width: 1199px) {
+  .admin-header {
+    padding: 0 16px;
+  }
+  .admin-header-right {
+    gap: 6px;
+  }
+  .admin-content {
+    margin: 16px;
+    padding: 16px;
+  }
+  .who-tag {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-header {
+    padding: 0 8px;
+  }
+  .admin-content {
+    margin: 8px;
+    padding: 12px;
+  }
+  .who-tag {
+    display: none;
+  }
+  .btn-text {
+    display: none;
+  }
+  .admin-footer {
+    font-size: 12px;
+    padding: 8px;
+  }
 }
 
 .fade-enter-active,

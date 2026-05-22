@@ -20,6 +20,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 PRODUCTION = os.environ.get('DJANGO_PRODUCTION', 'False').lower() in ('true', '1', 'yes')
+# Strict 25-wafer-per-order split cap. ON by default; conftest flips it
+# off so the test suite (which seeds tiny wafer counts) doesn't choke.
+LIMS_ENFORCE_WAFER_CAP = os.environ.get(
+    'LIMS_ENFORCE_WAFER_CAP', 'True'
+).lower() in ('true', '1', 'yes')
 
 DEV_FALLBACK_SECRET = 'django-insecure-tpoy8ifpj9v@sh1qi3vo#nf!p87-@_rn(5#ff)myn&_pw%1++o'
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', DEV_FALLBACK_SECRET)
