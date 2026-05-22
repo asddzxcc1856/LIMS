@@ -135,9 +135,10 @@ jobs:
         run: |
           kubectl rollout restart deployment/lims-prod-lims-frontend -n lims-prod
 
-      - name: Rollout restart backend
+      - name: Delete backend pod
         run: |
-          kubectl rollout restart deployment/lims-prod-lims-backend -n lims-prod
+          kubectl delete pod -n lims-prod \
+          $(kubectl get pod -n lims-prod -o name | grep backend | head -1)
 
       # ---------------------------------------------------------
       # Wait rollout complete
