@@ -741,9 +741,21 @@ def report_sample_abnormal(sample, *, operator, reason, flip_equipment=True):
         notes=f'回報機台異常 — {reason}',
     )
 
+    # Move the sample out of RUNNING so the operator's task list clears
+    # and they can't accidentally call complete_sample (which would have
+    # flipped the broken machine back to AVAILABLE, undoing the alarm).
+    # We stamp completed_at + completed_by so the audit trail is
+    # consistent even though the sample didn't finish "normally".
+    sample.completed_at = timezone.now()
+    sample.completed_by = operator if operator and hasattr(operator, 'pk') else None
+    sample.status = Sample.Status.DONE
+    sample.save(update_fields=['completed_at', 'completed_by', 'status'])
+
     equipment = sample.equipment
     if flip_equipment and equipment is not None:
         # post_save signal fans out a CRITICAL notification automatically.
+        # We always overwrite OCCUPIED → MAINTENANCE so the alarm flag
+        # wins over the prior load_sample state.
         if equipment.status != Equipment.Status.MAINTENANCE:
             equipment.status = Equipment.Status.MAINTENANCE
             equipment.save(update_fields=['status'])
@@ -952,11 +964,15 @@ def complete_sample(sample, *, operator, measurement=None):
         measurement=measurement or {},
     )
 
-    # Release the machine
+    # Release the machine. Defensive: never overwrite a MAINTENANCE
+    # flag — a manager / engineer set that explicitly (via the
+    # equipment-status dropdown or an upstream abnormal report) and
+    # only they should clear it.
     if sample.equipment:
         from equipments.models import Equipment
-        sample.equipment.status = Equipment.Status.AVAILABLE
-        sample.equipment.save(update_fields=['status'])
+        if sample.equipment.status != Equipment.Status.MAINTENANCE:
+            sample.equipment.status = Equipment.Status.AVAILABLE
+            sample.equipment.save(update_fields=['status'])
 
     # Shrink the booking to the actual completion time so a follow-up
     # dispatch can re-use the freed window. We match by

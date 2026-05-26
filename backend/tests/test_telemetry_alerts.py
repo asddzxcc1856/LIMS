@@ -221,6 +221,39 @@ class TestSampleAbnormalReport:
         # Equipment was flipped to maintenance.
         eq = Equipment.objects.get(pk=sample.equipment_id)
         assert eq.status == Equipment.Status.MAINTENANCE
+        # Sample left RUNNING so the operator can't accidentally finish
+        # it normally (which would have reverted the maintenance flag).
+        sample.refresh_from_db()
+        assert sample.status == Sample.Status.DONE
+        assert sample.completed_by_id == executor.id
+
+    def test_subsequent_complete_attempt_does_not_clear_maintenance(
+        self, db, running_sample, api_client,
+    ):
+        """Even if `complete_sample` is somehow re-invoked after an
+        abnormal report (e.g. via a stale UI), the equipment's
+        MAINTENANCE flag must survive — the alarm wins over the
+        AVAILABLE flip in :func:`orders.services.complete_sample`."""
+        sample, executor = running_sample
+        from rest_framework_simplejwt.tokens import RefreshToken
+        with freeze_time('2026-05-21 09:30:00'):
+            api_client.credentials(
+                HTTP_AUTHORIZATION=f'Bearer {RefreshToken.for_user(executor).access_token}',
+            )
+            api_client.post(
+                f'/api/orders/samples/{sample.id}/report-abnormal/',
+                {'reason': 'reproducer'},
+                format='json',
+            )
+            # Operator (or a stale UI) presses 下貨 — sample is already
+            # DONE so this 400s, BUT even if it had gone through, the
+            # equipment-status preserve guard would keep the alarm.
+            api_client.post(
+                f'/api/orders/samples/{sample.id}/complete/',
+                format='json',
+            )
+        eq = Equipment.objects.get(pk=sample.equipment_id)
+        assert eq.status == Equipment.Status.MAINTENANCE
 
     def test_non_assignee_cannot_report_abnormal(
         self, db, running_sample, api_client, department,
