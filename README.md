@@ -7,6 +7,13 @@
 ![Tests](https://img.shields.io/badge/tests-285%20pytest%20%2B%2055%20vitest%20%2B%208%20e2e-success)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
+A laboratory information management system tailored for semiconductor wafer
+fabs. The workflow tracks every 25-wafer FOUP through three specialised labs
+(Photolithography, Thin Film & Etch, Metrology & Inspection) at **sub-LOT
+granularity** — every wafer split is dispatched independently, parameters are
+tuned per sub-LOT, and the operator who runs the machine is auto-picked by
+workload while honouring an explicit "各司其職" rotation rule.
+
 ---
 
 ## Table of contents
